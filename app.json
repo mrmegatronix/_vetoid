@@ -1,25 +1,49 @@
 {
   "expo": {
-    "name": "_vetoid",
-    "slug": "_vetoid",
+    "name": "VetoID",
+    "slug": "vetoid",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "nz.vetoid.scanner",
+      "infoPlist": {
+        "NSCameraUsageDescription": "VetoID uses the camera strictly in memory to verify 18+ age eligibility under NZ law. Zero photos or personal data are ever stored.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "nz.vetoid.scanner",
+      "allowBackup": false,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.VIBRATE"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "experiments": {
+      "baseUrl": "/_vetoid"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "VetoID uses the camera strictly in memory to verify 18+ age eligibility. Zero images or personal details are saved."
+        }
+      ]
+    ]
   }
 }

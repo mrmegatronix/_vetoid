@@ -1,20 +1,22 @@
+import React from 'react';
+import { Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { usePreventScreenCapture } from 'expo-screen-capture';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ScannerScreen } from './src/components/ScannerScreen';
+
+const NativeScreenCaptureGuard: React.FC = () => {
+  // Enforce Android FLAG_SECURE & iOS screen-capture prevention (NZ Privacy Act 2020)
+  usePreventScreenCapture();
+  return null;
+};
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <SafeAreaProvider>
+      {Platform.OS !== 'web' && <NativeScreenCaptureGuard />}
+      <StatusBar style="light" />
+      <ScannerScreen />
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
