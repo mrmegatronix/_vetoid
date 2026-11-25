@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   closeText: {
     color: '#00C4FF',
     fontWeight: '800',
-    fontSize: 15,
+    fontSize: 16,
   },
   scroll: {
     gap: 12,
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     color: '#00C4FF',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '900',
     letterSpacing: 1,
     marginTop: 4,
@@ -166,15 +166,15 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#131820',
     borderRadius: 14,
-    padding: 14,
-    gap: 8,
+    padding: 16,
+    gap: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
   bullet: {
     color: '#E5E7EB',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 15,
+    lineHeight: 22,
   },
   bold: {
     color: '#FFFFFF',
@@ -183,11 +183,11 @@ const styles = StyleSheet.create({
   keyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   swatch: {
-    width: 14,
-    height: 14,
+    width: 16,
+    height: 16,
     borderRadius: 4,
   },
   keyTextWrap: {
@@ -195,28 +195,28 @@ const styles = StyleSheet.create({
   },
   keyLabel: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '800',
   },
   keyDesc: {
     color: '#9CA3AF',
-    fontSize: 12,
+    fontSize: 14,
   },
   tipText: {
     color: '#9CA3AF',
-    fontSize: 12,
+    fontSize: 14,
     fontStyle: 'italic',
     marginTop: 4,
   },
   acceptHead: {
     color: '#00FF88',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
   rejectHead: {
     color: '#FF6B6B',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '900',
     letterSpacing: 0.8,
     marginTop: 6,

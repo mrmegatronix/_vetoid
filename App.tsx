@@ -13,7 +13,7 @@ const NativeScreenCaptureGuard: React.FC = () => {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={{ backgroundColor: '#000000' }}>
       {Platform.OS !== 'web' && <NativeScreenCaptureGuard />}
       <StatusBar style="light" />
       <ScannerScreen />
