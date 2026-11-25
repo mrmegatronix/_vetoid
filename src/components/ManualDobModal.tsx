@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -8,11 +8,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { evaluateManualDob } from '../domain/nzIdParser';
+import {
+  getAllowedDobDigits,
+  getDobStepLabel,
+} from '../domain/smartDobKeypad';
 import { VerificationResult } from '../types/verification';
+import { playKeyTapSound } from '../utils/sounds';
 
 interface ManualDobModalProps {
   visible: boolean;
   minimumAge: number;
+  soundEnabled: boolean;
   onClose: () => void;
   onVerified: (result: VerificationResult) => void;
 }
@@ -22,24 +28,36 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLR', '0', 'DEL'];
 export const ManualDobModal: React.FC<ManualDobModalProps> = ({
   visible,
   minimumAge,
+  soundEnabled,
   onClose,
   onVerified,
 }) => {
   const [digits, setDigits] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  const allowedDigits = useMemo(() => getAllowedDobDigits(digits), [digits]);
+  const stepLabel = useMemo(() => getDobStepLabel(digits), [digits]);
+
   const handleKey = (key: string) => {
     setErrorMsg('');
     if (key === 'CLR') {
+      playKeyTapSound(soundEnabled);
       setDigits('');
       return;
     }
     if (key === 'DEL') {
+      playKeyTapSound(soundEnabled);
       setDigits((prev) => prev.slice(0, -1));
       return;
     }
-    if (digits.length >= 8) return;
-    const next = digits + key;
+    if (digits.length >= 8 || !allowedDigits.has(key)) return;
+
+    playKeyTapSound(soundEnabled);
+    // Smart auto-complete: entering '1' at year pos 4 fills '19'; entering '2' fills '20'
+    let next = digits + key;
+    if (digits.length === 4) {
+      next = key === '1' ? `${digits}19` : `${digits}20`;
+    }
     setDigits(next);
 
     if (next.length === 8) {
@@ -67,14 +85,12 @@ export const ManualDobModal: React.FC<ManualDobModalProps> = ({
       <SafeAreaView style={styles.backdrop}>
         <View style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>MANUAL DOB CHECK</Text>
+            <Text style={styles.title}>SMART DOB KEYPAD</Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
               <Text style={styles.closeText}>CLOSE</Text>
             </Pressable>
           </View>
-          <Text style={styles.subtitle}>
-            IPP 4 Visual Bypass &amp; Worn-Card Fallback (Zero Data Stored)
-          </Text>
+          <Text style={styles.stepPill}>{stepLabel}</Text>
 
           <View style={styles.displayBox}>
             <Text style={styles.displayText}>{formatted}</Text>
@@ -82,18 +98,31 @@ export const ManualDobModal: React.FC<ManualDobModalProps> = ({
           <Text style={styles.errorLine}>{errorMsg || ' '}</Text>
 
           <View style={styles.grid}>
-            {KEYS.map((key) => (
-              <Pressable
-                key={key}
-                style={[
-                  styles.keyBtn,
-                  (key === 'CLR' || key === 'DEL') && styles.keySecondary,
-                ]}
-                onPress={() => handleKey(key)}
-              >
-                <Text style={styles.keyText}>{key}</Text>
-              </Pressable>
-            ))}
+            {KEYS.map((key) => {
+              const isAction = key === 'CLR' || key === 'DEL';
+              const isEnabled = isAction || allowedDigits.has(key);
+              return (
+                <Pressable
+                  key={key}
+                  disabled={!isEnabled}
+                  style={[
+                    styles.keyBtn,
+                    isAction && styles.keySecondary,
+                    !isEnabled && styles.keyDisabled,
+                  ]}
+                  onPress={() => handleKey(key)}
+                >
+                  <Text
+                    style={[
+                      styles.keyText,
+                      !isEnabled && styles.keyTextDisabled,
+                    ]}
+                  >
+                    {key}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       </SafeAreaView>
@@ -123,7 +152,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
@@ -134,11 +163,13 @@ const styles = StyleSheet.create({
   closeText: {
     color: '#00C4FF',
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: 15,
   },
-  subtitle: {
-    color: '#9CA3AF',
+  stepPill: {
+    color: '#00FF88',
     fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
   displayBox: {
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -147,11 +178,11 @@ const styles = StyleSheet.create({
     borderColor: '#00C4FF',
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 2,
   },
   displayText: {
     color: '#FFFFFF',
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: '800',
     letterSpacing: 2,
     fontVariant: ['tabular-nums'],
@@ -172,21 +203,29 @@ const styles = StyleSheet.create({
   },
   keyBtn: {
     width: '31%',
-    minHeight: 62,
+    minHeight: 64,
     borderRadius: 12,
     backgroundColor: '#161B24',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.14)',
   },
   keySecondary: {
     backgroundColor: '#1F2430',
   },
+  keyDisabled: {
+    backgroundColor: '#0C0F14',
+    borderColor: 'rgba(255,255,255,0.04)',
+    opacity: 0.25,
+  },
   keyText: {
     color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
+  },
+  keyTextDisabled: {
+    color: '#6B7280',
   },
 });

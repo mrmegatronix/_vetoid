@@ -22,6 +22,19 @@ export type VerdictStatus =
   | 'EXPIRED'
   | 'INVALID_DOC';
 
+export type StaffRole =
+  | 'Duty Manager'
+  | 'Waiter'
+  | 'Bartender'
+  | 'Security Staff';
+
+export const STAFF_ROLES: StaffRole[] = [
+  'Duty Manager',
+  'Security Staff',
+  'Bartender',
+  'Waiter',
+];
+
 /**
  * Strictly PII-free verification result.
  * Never holds patron name, address, licence number, passport number, or raw MRZ.
@@ -42,8 +55,22 @@ export interface VerificationResult {
   evaluatedAtIso: string;
 }
 
+/**
+ * Strictly anonymous timestamped scan record for CCTV correlation & DLC audits.
+ * Contains ZERO patron PII.
+ */
+export interface AnonymousScanEvent {
+  timestampIso: string;
+  nzTime: string;
+  verdict: VerdictStatus | 'FACE_MISMATCH';
+  docType: DocumentCategory | 'VISUAL_FACE_CHECK';
+  staffRole: StaffRole;
+}
+
 export interface ShiftTally {
   shiftStartedAt: string;
+  shiftEndedAt?: string;
+  staffRole: StaffRole;
   totalScanned: number;
   pass18Plus: number;
   under18: number;
@@ -51,24 +78,35 @@ export interface ShiftTally {
   invalidDoc: number;
   manualFallback: number;
   faceMismatchRefusals: number;
+  events: AnonymousScanEvent[];
+}
+
+export interface ShiftBackupRecord extends ShiftTally {
+  id: string;
+  backedUpAt: string;
+  shiftEndedAt: string;
 }
 
 export interface VenueSettings {
   staffPin: string;
-  autoResetSeconds: number;
+  autoResetSeconds: number; // 0 = hold until manual tap
   showUnder25Cue: boolean;
   requireFaceConfirm: boolean;
   leftHandedMode: boolean;
   keepUnlockedStandby: boolean;
+  soundEffectsEnabled: boolean;
+  defaultStaffRole: StaffRole;
   minimumAge: number;
 }
 
 export const DEFAULT_VENUE_SETTINGS: VenueSettings = {
   staffPin: ENV_STAFF_PIN,
-  autoResetSeconds: 3,
+  autoResetSeconds: 8,
   showUnder25Cue: true,
   requireFaceConfirm: false,
   leftHandedMode: false,
   keepUnlockedStandby: true,
+  soundEffectsEnabled: true,
+  defaultStaffRole: 'Security Staff',
   minimumAge: 18,
 };

@@ -1,0 +1,11 @@
+{
+  "name": "VetoID — NZ 18+ ID Scanner",
+  "short_name": "VetoID",
+  "start_url": "/_vetoid/",
+  "scope": "/_vetoid/",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "description": "Zero-retention on-device 18+ ID verification for New Zealand hospitality venues."
+}

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   Platform,
@@ -11,25 +11,36 @@ import {
 import QRCode from 'qrcode';
 
 export const SHARE_APP_URL = 'https://mrmegatronix.github.io/_vetoid/';
+export const PATRON_INFO_URL = 'https://mrmegatronix.github.io/_vetoid/?patron=1';
 
 interface ShareQrModalProps {
   visible: boolean;
-  url?: string;
+  initialMode?: 'patron' | 'app';
   onClose: () => void;
 }
 
 /**
- * 100% offline QR matrix renderer (zero external API calls, works on iOS/Android/Web).
+ * 100% offline QR matrix renderer with Patron Info QR & Staff App Share QR tabs.
  */
 export const ShareQrModal: React.FC<ShareQrModalProps> = ({
   visible,
-  url = SHARE_APP_URL,
+  initialMode = 'patron',
   onClose,
 }) => {
+  const [mode, setMode] = useState<'patron' | 'app'>(initialMode);
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    if (visible) {
+      setMode(initialMode);
+      setCopied(false);
+    }
+  }, [visible, initialMode]);
+
+  const activeUrl = mode === 'patron' ? PATRON_INFO_URL : SHARE_APP_URL;
+
   const matrix = useMemo(() => {
-    const qr = QRCode.create(url, { errorCorrectionLevel: 'M' });
+    const qr = QRCode.create(activeUrl, { errorCorrectionLevel: 'M' });
     const size = qr.modules.size;
     const rows: boolean[][] = [];
     for (let r = 0; r < size; r++) {
@@ -40,9 +51,9 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
       rows.push(row);
     }
     return { size, rows };
-  }, [url]);
+  }, [activeUrl]);
 
-  const qrPx = 224;
+  const qrPx = 228;
   const cellSize = qrPx / matrix.size;
 
   const handleCopy = async () => {
@@ -52,14 +63,14 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
         typeof navigator !== 'undefined' &&
         navigator.clipboard
       ) {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(activeUrl);
         setCopied(true);
         setTimeout(() => setCopied(false), 1800);
         return;
       }
-      await Share.share({ message: `VetoID NZ 18+ Scanner: ${url}`, url });
+      await Share.share({ message: `VetoID NZ 18+ Scanner: ${activeUrl}`, url: activeUrl });
     } catch {
-      // Ignore user cancel
+      // Ignore cancel
     }
   };
 
@@ -72,16 +83,19 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
       ) {
         await (
           navigator as Navigator & { share: (d: { title: string; url: string }) => Promise<void> }
-        ).share({ title: 'VetoID — NZ 18+ ID Scanner', url });
+        ).share({
+          title: mode === 'patron' ? 'About VetoID (NZ Privacy Info)' : 'VetoID — NZ 18+ ID Scanner',
+          url: activeUrl,
+        });
         return;
       }
       await Share.share({
         title: 'VetoID — NZ 18+ ID Scanner',
-        message: `VetoID NZ 18+ ID Scanner: ${url}`,
-        url,
+        message: `VetoID: ${activeUrl}`,
+        url: activeUrl,
       });
     } catch {
-      // Ignore user cancel
+      // Ignore cancel
     }
   };
 
@@ -90,17 +104,41 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <View style={styles.header}>
-            <Text style={styles.title}>SHARE VetoID</Text>
+            <Text style={styles.title}>
+              {mode === 'patron' ? 'PATRON PRIVACY QR' : 'SHARE VetoID APP'}
+            </Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
               <Text style={styles.closeText}>CLOSE</Text>
             </Pressable>
           </View>
 
+          {/* Mode Switcher */}
+          <View style={styles.tabRow}>
+            <Pressable
+              style={[styles.tabBtn, mode === 'patron' && styles.tabBtnActive]}
+              onPress={() => setMode('patron')}
+            >
+              <Text style={[styles.tabText, mode === 'patron' && styles.tabTextActive]}>
+                PATRON INFO
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.tabBtn, mode === 'app' && styles.tabBtnActive]}
+              onPress={() => setMode('app')}
+            >
+              <Text style={[styles.tabText, mode === 'app' && styles.tabTextActive]}>
+                STAFF APP
+              </Text>
+            </Pressable>
+          </View>
+
           <Text style={styles.subtitle}>
-            Scan to open VetoID on another device
+            {mode === 'patron'
+              ? 'Patrons can scan this QR to learn how VetoID protects their privacy under NZ law'
+              : 'Scan to open VetoID on another staff phone'}
           </Text>
 
-          {/* High-contrast white quiet zone for reliable low-light scanning */}
+          {/* High-contrast white quiet zone */}
           <View style={styles.qrFrame}>
             <View style={{ width: qrPx, height: qrPx }}>
               {matrix.rows.map((row, rIdx) => (
@@ -121,7 +159,7 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
           </View>
 
           <Text style={styles.urlText} numberOfLines={1} ellipsizeMode="middle">
-            {url}
+            {activeUrl}
           </Text>
 
           <View style={styles.actionRow}>
@@ -145,21 +183,21 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.9)',
+    backgroundColor: 'rgba(0,0,0,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
   },
   card: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 380,
     backgroundColor: '#0A0D12',
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.14)',
     padding: 22,
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   header: {
     width: '100%',
@@ -169,9 +207,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '900',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
   closeBtn: {
     paddingHorizontal: 8,
@@ -179,13 +217,39 @@ const styles = StyleSheet.create({
   },
   closeText: {
     color: '#00C4FF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
   },
-  subtitle: {
+  tabRow: {
+    width: '100%',
+    flexDirection: 'row',
+    backgroundColor: '#131820',
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 9,
+    alignItems: 'center',
+  },
+  tabBtnActive: {
+    backgroundColor: '#00C4FF',
+  },
+  tabText: {
     color: '#9CA3AF',
     fontSize: 13,
+    fontWeight: '900',
+  },
+  tabTextActive: {
+    color: '#000000',
+  },
+  subtitle: {
+    color: '#D1D5DB',
+    fontSize: 14,
     textAlign: 'center',
+    lineHeight: 20,
   },
   qrFrame: {
     backgroundColor: '#FFFFFF',
@@ -194,7 +258,7 @@ const styles = StyleSheet.create({
   },
   urlText: {
     color: '#00C4FF',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     maxWidth: '100%',
   },
@@ -206,7 +270,7 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     flex: 1,
-    minHeight: 50,
+    minHeight: 52,
     borderRadius: 12,
     backgroundColor: '#161B24',
     borderWidth: 1,
@@ -216,12 +280,12 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
   },
   primaryBtn: {
     flex: 1,
-    minHeight: 50,
+    minHeight: 52,
     borderRadius: 12,
     backgroundColor: '#00C4FF',
     alignItems: 'center',
@@ -229,7 +293,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: '#000000',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900',
   },
 });

@@ -15,6 +15,7 @@ interface VerdictOverlayProps {
   requireFaceConfirm: boolean;
   onDismiss: () => void;
   onFaceMismatchRefuse: () => void;
+  onOpenPatronQr: () => void;
 }
 
 const VERDICT_PALETTE = {
@@ -47,6 +48,7 @@ export const VerdictOverlay: React.FC<VerdictOverlayProps> = ({
   requireFaceConfirm,
   onDismiss,
   onFaceMismatchRefuse,
+  onOpenPatronQr,
 }) => {
   const [patronMode, setPatronMode] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(autoResetSeconds);
@@ -83,6 +85,13 @@ export const VerdictOverlay: React.FC<VerdictOverlayProps> = ({
             Privacy Notice (NZ Privacy Act 2020): VetoID processes age checks strictly
             in temporary memory. Zero photos, names, or ID numbers are saved.
           </Text>
+          <Pressable
+            style={styles.patronQrBtn}
+            onPress={onOpenPatronQr}
+            accessibilityRole="button"
+          >
+            <Text style={styles.patronQrText}>SHOW PATRON PRIVACY QR</Text>
+          </Pressable>
           <Pressable
             style={styles.patronBackBtn}
             onPress={() => setPatronMode(false)}
@@ -426,6 +435,22 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.12)',
     paddingTop: 14,
+  },
+  patronQrBtn: {
+    marginTop: 8,
+    minHeight: 54,
+    borderRadius: 14,
+    backgroundColor: '#131820',
+    borderWidth: 1.5,
+    borderColor: '#00FF88',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  patronQrText: {
+    color: '#00FF88',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
   patronBackBtn: {
     marginTop: 12,

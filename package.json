@@ -28,7 +28,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:pages": "rm -rf docs && expo export --platform web --output-dir docs && touch docs/.nojekyll",
+    "build:pages": "rm -rf docs && expo export --platform web --output-dir docs && node scripts/postbuild-pages.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

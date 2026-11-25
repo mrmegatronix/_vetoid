@@ -16,21 +16,31 @@ import {
   PRACTICE_DRILL_CARDS,
 } from '../domain/nzIdParser';
 import {
+  archiveShiftEndOfDay,
   createEmptyShiftTally,
+  loadShiftBackups,
   loadShiftTally,
   loadVenueSettings,
   recordAnonymousVerdict,
   recordFaceMismatchRefusal,
   resetShiftTally,
   saveVenueSettings,
+  updateShiftStaffRole,
 } from '../storage/shiftStore';
 import {
   DEFAULT_VENUE_SETTINGS,
+  ShiftBackupRecord,
   ShiftTally,
+  StaffRole,
   VenueSettings,
   VerificationResult,
 } from '../types/verification';
 import { triggerVerdictHaptics } from '../utils/haptics';
+import {
+  playScanShutterSound,
+  playUnlockSound,
+  playVerdictSound,
+} from '../utils/sounds';
 import { InfoModal } from './InfoModal';
 import { ManualDobModal } from './ManualDobModal';
 import { PinGateModal } from './PinGateModal';
@@ -51,12 +61,15 @@ export const ScannerScreen: React.FC = () => {
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
   const [shareQrOpen, setShareQrOpen] = useState(false);
+  const [qrMode, setQrMode] = useState<'patron' | 'app'>('patron');
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const [isSessionUnlocked, setIsSessionUnlocked] = useState(false);
   const [standbyDimmed, setStandbyDimmed] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<string>('');
   const [tally, setTally] = useState<ShiftTally>(createEmptyShiftTally());
+  const [backups, setBackups] = useState<ShiftBackupRecord[]>([]);
   const [settings, setSettings] = useState<VenueSettings>(DEFAULT_VENUE_SETTINGS);
   const [clockTampered, setClockTampered] = useState(false);
   const [clockState, setClockState] = useState({ hh: '00', mm: '00', colonOn: true });
@@ -66,6 +79,7 @@ export const ScannerScreen: React.FC = () => {
 
   useEffect(() => {
     loadShiftTally().then(setTally);
+    loadShiftBackups().then(setBackups);
     loadVenueSettings().then(setSettings);
   }, []);
 
@@ -97,10 +111,11 @@ export const ScannerScreen: React.FC = () => {
     async (result: VerificationResult) => {
       setActiveVerdict(result);
       triggerVerdictHaptics(result.verdict);
+      playVerdictSound(result.verdict, settings.soundEffectsEnabled);
       const updated = await recordAnonymousVerdict(tally, result);
       setTally(updated);
     },
-    [tally]
+    [tally, settings.soundEffectsEnabled]
   );
 
   const handleDismissVerdict = useCallback(() => {
@@ -126,8 +141,36 @@ export const ScannerScreen: React.FC = () => {
   };
 
   const handleResetShift = async () => {
-    const fresh = await resetShiftTally();
+    const fresh = await resetShiftTally(tally.staffRole);
     setTally(fresh);
+  };
+
+  const handleChangeStaffRole = async (role: StaffRole) => {
+    const updated = await updateShiftStaffRole(tally, role);
+    setTally(updated);
+    await handleUpdateSettings({ ...settings, defaultStaffRole: role });
+  };
+
+  const handleEndShiftAndBackup = async (): Promise<ShiftBackupRecord> => {
+    const { backup, backups: nextBackups, freshShift } = await archiveShiftEndOfDay(tally);
+    setBackups(nextBackups);
+    setTally(freshShift);
+    return backup;
+  };
+
+  const handleToggleFullscreen = async () => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      } else {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    } catch {
+      // Ignore browser fullscreen restrictions
+    }
   };
 
   const handleOpenShift = () => {
@@ -139,6 +182,7 @@ export const ScannerScreen: React.FC = () => {
   };
 
   const handlePinUnlocked = async (keepUnlocked: boolean) => {
+    playUnlockSound(settings.soundEffectsEnabled);
     setPinModalOpen(false);
     setIsSessionUnlocked(keepUnlocked);
     if (keepUnlocked !== settings.keepUnlockedStandby) {
@@ -168,6 +212,7 @@ export const ScannerScreen: React.FC = () => {
     if (!webScannerRef.current) return;
 
     setScanning(true);
+    playScanShutterSound(settings.soundEffectsEnabled);
     setScanStatus('CAPTURING FRAME...');
     try {
       const { text, error } = await webScannerRef.current.scanFrame();
@@ -231,11 +276,23 @@ export const ScannerScreen: React.FC = () => {
         <View style={styles.brandRow}>
           <Text style={styles.brandTitle}>VetoID</Text>
           <View style={styles.nzBadge}>
-            <Text style={styles.nzBadgeText}>NZ 18+</Text>
+            <Text style={styles.nzBadgeText} numberOfLines={1}>
+              {tally.staffRole}
+            </Text>
           </View>
         </View>
 
         <View style={styles.headerRight}>
+          {Platform.OS === 'web' && (
+            <Pressable
+              style={styles.infoBtn}
+              onPress={handleToggleFullscreen}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle fullscreen"
+            >
+              <Text style={styles.infoBtnText}>{isFullscreen ? 'EXIT' : 'FS'}</Text>
+            </Pressable>
+          )}
           {isSessionUnlocked && settings.keepUnlockedStandby && (
             <Pressable
               style={styles.standbyPillBtn}
@@ -256,9 +313,12 @@ export const ScannerScreen: React.FC = () => {
           </Pressable>
           <Pressable
             style={styles.qrBtn}
-            onPress={() => setShareQrOpen(true)}
+            onPress={() => {
+              setQrMode('patron');
+              setShareQrOpen(true);
+            }}
             accessibilityRole="button"
-            accessibilityLabel="Share QR code"
+            accessibilityLabel="Patron and Share QR code"
           >
             <Text style={styles.qrBtnText}>QR</Text>
           </Pressable>
@@ -365,6 +425,10 @@ export const ScannerScreen: React.FC = () => {
           requireFaceConfirm={settings.requireFaceConfirm}
           onDismiss={handleDismissVerdict}
           onFaceMismatchRefuse={handleFaceMismatch}
+          onOpenPatronQr={() => {
+            setQrMode('patron');
+            setShareQrOpen(true);
+          }}
         />
       )}
 
@@ -372,6 +436,7 @@ export const ScannerScreen: React.FC = () => {
       <ManualDobModal
         visible={manualModalOpen}
         minimumAge={settings.minimumAge}
+        soundEnabled={settings.soundEffectsEnabled}
         onClose={() => setManualModalOpen(false)}
         onVerified={(res) => {
           setManualModalOpen(false);
@@ -421,9 +486,12 @@ export const ScannerScreen: React.FC = () => {
       <ShiftSummaryModal
         visible={shiftModalOpen}
         tally={tally}
+        backups={backups}
         settings={settings}
         isUnlocked={isSessionUnlocked && settings.keepUnlockedStandby}
         onUpdateSettings={handleUpdateSettings}
+        onChangeStaffRole={handleChangeStaffRole}
+        onEndShiftAndBackup={handleEndShiftAndBackup}
         onResetShift={handleResetShift}
         onEnterStandby={handleEnterStandby}
         onLockNow={handleLockSession}
@@ -436,9 +504,10 @@ export const ScannerScreen: React.FC = () => {
         onClose={() => setInfoModalOpen(false)}
       />
 
-      {/* Offline Share QR Code Modal */}
+      {/* Offline Patron Info & App Share QR Modal */}
       <ShareQrModal
         visible={shareQrOpen}
+        initialMode={qrMode}
         onClose={() => setShareQrOpen(false)}
       />
 
@@ -477,8 +546,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
     width: '100%',
-    maxWidth: Platform.OS === 'web' ? 540 : undefined,
-    alignSelf: 'center',
   },
   headerBar: {
     flexDirection: 'row',

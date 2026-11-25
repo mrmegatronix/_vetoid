@@ -1,55 +1,156 @@
 import React, { useState } from 'react';
 import {
   Modal,
+  Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ShiftTally, VenueSettings } from '../types/verification';
+import { buildShiftBackupCsv } from '../storage/shiftStore';
+import {
+  ShiftBackupRecord,
+  ShiftTally,
+  STAFF_ROLES,
+  StaffRole,
+  VenueSettings,
+} from '../types/verification';
 
 interface ShiftSummaryModalProps {
   visible: boolean;
   tally: ShiftTally;
+  backups: ShiftBackupRecord[];
   settings: VenueSettings;
   isUnlocked: boolean;
   onUpdateSettings: (next: VenueSettings) => void;
+  onChangeStaffRole: (role: StaffRole) => void;
+  onEndShiftAndBackup: () => Promise<ShiftBackupRecord>;
   onResetShift: () => void;
   onEnterStandby: () => void;
   onLockNow: () => void;
   onClose: () => void;
 }
 
+const HOLD_OPTIONS = [
+  { label: '5s', value: 5 },
+  { label: '8s', value: 8 },
+  { label: '12s', value: 12 },
+  { label: 'HOLD', value: 0 },
+];
+
+function formatShiftDuration(startIso: string): string {
+  const diffMs = Math.max(0, Date.now() - new Date(startIso).getTime());
+  const totalMins = Math.floor(diffMs / 60_000);
+  const hrs = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  return `${String(hrs).padStart(2, '0')}h ${String(mins).padStart(2, '0')}m`;
+}
+
+function formatNzShortTime(iso: string): string {
+  return new Intl.DateTimeFormat('en-NZ', {
+    timeZone: 'Pacific/Auckland',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(iso));
+}
+
+async function exportBackupFile(record: ShiftBackupRecord): Promise<void> {
+  const csv = buildShiftBackupCsv(record);
+  const filename = `vetoid-shift-${record.shiftEndedAt.slice(0, 10)}.csv`;
+
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  await Share.share({
+    title: filename,
+    message: csv,
+  });
+}
+
 export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
   visible,
   tally,
+  backups,
   settings,
   isUnlocked,
   onUpdateSettings,
+  onChangeStaffRole,
+  onEndShiftAndBackup,
   onResetShift,
   onEnterStandby,
   onLockNow,
   onClose,
 }) => {
   const [showSignage, setShowSignage] = useState(false);
+  const [backupNotice, setBackupNotice] = useState('');
+
+  const handleEndOfDayBackup = async () => {
+    const record = await onEndShiftAndBackup();
+    await exportBackupFile(record);
+    setBackupNotice(`Shift archived & CSV exported (${record.totalScanned} scans).`);
+    setTimeout(() => setBackupNotice(''), 3500);
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <SafeAreaView style={styles.backdrop}>
         <View style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>SHIFT TALLY &amp; SETTINGS</Text>
+            <Text style={styles.title}>SHIFT &amp; SETTINGS</Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
               <Text style={styles.closeText}>DONE</Text>
             </Pressable>
           </View>
 
           <ScrollView contentContainerStyle={styles.scrollContent}>
+            {/* Active Shift Timing & Staff Position */}
+            <Text style={styles.sectionLabel}>ACTIVE SHIFT &amp; STAFF POSITION</Text>
+            <View style={styles.shiftMetaCard}>
+              <Text style={styles.shiftMetaLine}>
+                Started: <Text style={styles.bold}>{formatNzShortTime(tally.shiftStartedAt)}</Text>
+                {'  •  '}
+                Elapsed: <Text style={styles.accentBold}>{formatShiftDuration(tally.shiftStartedAt)}</Text>
+              </Text>
+              <View style={styles.roleRow}>
+                {STAFF_ROLES.map((role) => {
+                  const active = tally.staffRole === role;
+                  return (
+                    <Pressable
+                      key={role}
+                      style={[styles.roleChip, active && styles.roleChipActive]}
+                      onPress={() => onChangeStaffRole(role)}
+                    >
+                      <Text
+                        style={[styles.roleChipText, active && styles.roleChipTextActive]}
+                        numberOfLines={1}
+                      >
+                        {role}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
             <Text style={styles.sectionLabel}>
-              ANONYMOUS SHIFT COUNTERS (ZERO PII STORED)
+              ANONYMOUS SHIFT COUNTERS (CCTV-SYNC READY • ZERO PII)
             </Text>
 
             <View style={styles.statGrid}>
@@ -61,11 +162,99 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
               <StatTile label="FACE REFUSAL" value={tally.faceMismatchRefusals} accent="#FF6B6B" />
             </View>
 
-            <Pressable style={styles.resetBtn} onPress={onResetShift}>
-              <Text style={styles.resetBtnText}>RESET SHIFT COUNTERS</Text>
-            </Pressable>
+            {/* End-of-Day Backup & Reset */}
+            <View style={styles.standbyActionsRow}>
+              <Pressable style={styles.backupBtn} onPress={handleEndOfDayBackup}>
+                <Text style={styles.backupBtnText} numberOfLines={1}>
+                  END SHIFT &amp; BACKUP CSV
+                </Text>
+              </Pressable>
+              <Pressable style={styles.resetBtnSmall} onPress={onResetShift}>
+                <Text style={styles.resetBtnText} numberOfLines={1}>
+                  RESET
+                </Text>
+              </Pressable>
+            </View>
+            {backupNotice ? <Text style={styles.backupNotice}>{backupNotice}</Text> : null}
 
-            <Text style={styles.sectionLabel}>DOOR OPERATIONS</Text>
+            {/* Recent Anonymous CCTV Timestamp Log */}
+            {tally.events.length > 0 && (
+              <>
+                <Text style={styles.sectionLabel}>RECENT SCAN TIMESTAMPS (CCTV SYNC)</Text>
+                <View style={styles.logCard}>
+                  {[...tally.events].reverse().slice(0, 5).map((ev, idx) => (
+                    <Text key={`${ev.timestampIso}-${idx}`} style={styles.logRow} numberOfLines={1}>
+                      {ev.nzTime} • {ev.verdict} • {ev.staffRole}
+                    </Text>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {/* End-of-Day Archived Backups */}
+            {backups.length > 0 && (
+              <>
+                <Text style={styles.sectionLabel}>END-OF-DAY SHIFT ARCHIVE ({backups.length})</Text>
+                <View style={styles.logCard}>
+                  {backups.slice(0, 5).map((b) => (
+                    <View key={b.id} style={styles.archiveRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.archiveTitle} numberOfLines={1}>
+                          {formatNzShortTime(b.shiftStartedAt)} • {b.staffRole}
+                        </Text>
+                        <Text style={styles.archiveSub} numberOfLines={1}>
+                          Total: {b.totalScanned} | Pass: {b.pass18Plus} | U18: {b.under18} | Exp: {b.expired}
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={styles.exportMiniBtn}
+                        onPress={() => exportBackupFile(b)}
+                      >
+                        <Text style={styles.exportMiniText}>CSV</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+
+            <Text style={styles.sectionLabel}>VERDICT DISPLAY HOLD TIME</Text>
+            <View style={styles.roleRow}>
+              {HOLD_OPTIONS.map((opt) => {
+                const active = settings.autoResetSeconds === opt.value;
+                return (
+                  <Pressable
+                    key={opt.label}
+                    style={[styles.holdChip, active && styles.roleChipActive]}
+                    onPress={() =>
+                      onUpdateSettings({ ...settings, autoResetSeconds: opt.value })
+                    }
+                  >
+                    <Text style={[styles.roleChipText, active && styles.roleChipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.sectionLabel}>DOOR OPERATIONS &amp; AUDIO</Text>
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextWrap}>
+                <Text style={styles.settingTitle}>Sound Effects</Text>
+                <Text style={styles.settingSub}>
+                  Audio chimes for Pass, Under-18 alarm, Expired, and keypad taps
+                </Text>
+              </View>
+              <Switch
+                value={settings.soundEffectsEnabled}
+                onValueChange={(v) =>
+                  onUpdateSettings({ ...settings, soundEffectsEnabled: v })
+                }
+                trackColor={{ false: '#374151', true: '#00C4FF' }}
+              />
+            </View>
+
             <View style={styles.settingRow}>
               <View style={styles.settingTextWrap}>
                 <Text style={styles.settingTitle}>Show Under-25 Heightened Cue</Text>
@@ -86,7 +275,7 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
               <View style={styles.settingTextWrap}>
                 <Text style={styles.settingTitle}>Require Face-Match Confirmation</Text>
                 <Text style={styles.settingSub}>
-                  Disables auto-reset on PASS until staff tap Confirm or Refuse
+                  Holds PASS screen until staff tap Confirm or Refuse
                 </Text>
               </View>
               <Switch
@@ -165,6 +354,7 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
                   and Supply of Alcohol Act 2012.{'\n'}
                   • Zero Retention: All scanning occurs on-device in temporary memory. No
                   names, photos, or ID numbers are saved or transmitted.{'\n'}
+                  • Anonymous Audit: Only scan timestamps and aggregate counts are logged.{'\n'}
                   • Visual Option: You may request a manual visual ID check at any time.
                 </Text>
               </View>
@@ -196,7 +386,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    maxHeight: '88%',
+    maxHeight: '92%',
     backgroundColor: '#0A0D12',
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
@@ -208,11 +398,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
@@ -223,18 +413,72 @@ const styles = StyleSheet.create({
   closeText: {
     color: '#00C4FF',
     fontWeight: '800',
-    fontSize: 15,
+    fontSize: 16,
   },
   scrollContent: {
-    gap: 14,
-    paddingBottom: 24,
+    gap: 12,
+    paddingBottom: 28,
   },
   sectionLabel: {
     color: '#9CA3AF',
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1,
-    marginTop: 4,
+    marginTop: 6,
+  },
+  shiftMetaCard: {
+    backgroundColor: '#131820',
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  shiftMetaLine: {
+    color: '#D1D5DB',
+    fontSize: 14,
+  },
+  bold: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  accentBold: {
+    color: '#00FF88',
+    fontWeight: '900',
+  },
+  roleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  roleChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: '#1B2230',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  holdChip: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: '#1B2230',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+  },
+  roleChipActive: {
+    backgroundColor: '#00C4FF',
+    borderColor: '#00C4FF',
+  },
+  roleChipText: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  roleChipTextActive: {
+    color: '#000000',
   },
   statGrid: {
     flexDirection: 'row',
@@ -257,11 +501,27 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     color: '#9CA3AF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     marginTop: 2,
   },
-  resetBtn: {
+  backupBtn: {
+    flex: 2,
+    backgroundColor: 'rgba(0,255,136,0.16)',
+    borderWidth: 1,
+    borderColor: '#00FF88',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  backupBtnText: {
+    color: '#00FF88',
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  resetBtnSmall: {
+    flex: 1,
     backgroundColor: 'rgba(255,107,107,0.14)',
     borderWidth: 1,
     borderColor: '#FF6B6B',
@@ -274,6 +534,54 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 13,
     letterSpacing: 0.6,
+  },
+  backupNotice: {
+    color: '#00FF88',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  logCard: {
+    backgroundColor: '#131820',
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+  },
+  logRow: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+  },
+  archiveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+    paddingBottom: 8,
+  },
+  archiveTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  archiveSub: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  exportMiniBtn: {
+    backgroundColor: 'rgba(0,196,255,0.16)',
+    borderWidth: 1,
+    borderColor: '#00C4FF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  exportMiniText: {
+    color: '#00C4FF',
+    fontSize: 12,
+    fontWeight: '900',
   },
   settingRow: {
     flexDirection: 'row',
@@ -289,12 +597,12 @@ const styles = StyleSheet.create({
   },
   settingTitle: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   settingSub: {
     color: '#9CA3AF',
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
   },
   standbyActionsRow: {
@@ -355,12 +663,12 @@ const styles = StyleSheet.create({
   },
   signageTitle: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '900',
   },
   signageBody: {
     color: '#D1D5DB',
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 21,
   },
 });

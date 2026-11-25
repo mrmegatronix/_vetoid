@@ -10,6 +10,7 @@ import {
   evaluateScannedDocumentText,
   PRACTICE_DRILL_CARDS,
 } from '../nzIdParser';
+import { getAllowedDobDigits } from '../smartDobKeypad';
 
 const REF_DATE = { year: 2026, month: 11, day: 23 };
 
@@ -123,5 +124,24 @@ describe('SSAA 2012 NZ ID Verification Rules', () => {
     expect(pass?.verdict).toBe('PASS_18_PLUS');
     const fail = evaluateManualDob(10, 5, 2010, REF_DATE);
     expect(fail?.verdict).toBe('UNDER_18');
+  });
+});
+
+describe('Smart DOB Keypad Constraints', () => {
+  it('restricts day tens to 0-3 and prevents month > 12', () => {
+    expect([...getAllowedDobDigits('', 2026)]).toEqual(['0', '1', '2', '3']);
+    // After day 15, month tens only 0 or 1
+    expect([...getAllowedDobDigits('15', 2026)]).toEqual(['0', '1']);
+    // After day 15 and month tens '1', only 0, 1, 2 allowed (10, 11, 12)
+    expect([...getAllowedDobDigits('151', 2026)]).toEqual(['0', '1', '2']);
+  });
+
+  it('restricts year start to 19.. or 20.. and blocks impossible day 31 months', () => {
+    // Day 31 with month tens '0' excludes Feb(02), Apr(04), Jun(06), Sep(09)
+    expect([...getAllowedDobDigits('310', 2026)]).toEqual(['1', '3', '5', '7', '8']);
+    // Year position 4 only allows 1 or 2
+    expect([...getAllowedDobDigits('1506', 2026)]).toEqual(['1', '2']);
+    expect([...getAllowedDobDigits('15061', 2026)]).toEqual(['9']);
+    expect([...getAllowedDobDigits('15062', 2026)]).toEqual(['0']);
   });
 });
