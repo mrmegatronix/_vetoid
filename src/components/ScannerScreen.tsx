@@ -33,6 +33,7 @@ import {
 import { triggerVerdictHaptics } from '../utils/haptics';
 import { ManualDobModal } from './ManualDobModal';
 import { PinGateModal } from './PinGateModal';
+import { ShareQrModal } from './ShareQrModal';
 import { ShiftSummaryModal } from './ShiftSummaryModal';
 import { VerdictOverlay } from './VerdictOverlay';
 
@@ -44,6 +45,7 @@ export const ScannerScreen: React.FC = () => {
   const [drillModalOpen, setDrillModalOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
+  const [shareQrOpen, setShareQrOpen] = useState(false);
   const [tally, setTally] = useState<ShiftTally>(createEmptyShiftTally());
   const [settings, setSettings] = useState<VenueSettings>(DEFAULT_VENUE_SETTINGS);
   const [clockTampered, setClockTampered] = useState(false);
@@ -161,13 +163,23 @@ export const ScannerScreen: React.FC = () => {
           </View>
         </View>
 
-        <View style={styles.clockPill}>
-          <Text style={styles.clockText}>
-            {clockState.hh}
-            <Text style={{ opacity: clockState.colonOn ? 1 : 0 }}>:</Text>
-            {clockState.mm}
-          </Text>
-          <Text style={styles.zeroPiiTag}>ZERO-PII</Text>
+        <View style={styles.headerRight}>
+          <Pressable
+            style={styles.qrBtn}
+            onPress={() => setShareQrOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Share QR code"
+          >
+            <Text style={styles.qrBtnText}>QR</Text>
+          </Pressable>
+          <View style={styles.clockPill}>
+            <Text style={styles.clockText}>
+              {clockState.hh}
+              <Text style={{ opacity: clockState.colonOn ? 1 : 0 }}>:</Text>
+              {clockState.mm}
+            </Text>
+            <Text style={styles.zeroPiiTag}>ZERO-PII</Text>
+          </View>
         </View>
       </View>
 
@@ -317,6 +329,12 @@ export const ScannerScreen: React.FC = () => {
         onResetShift={handleResetShift}
         onClose={() => setShiftModalOpen(false)}
       />
+
+      {/* Offline Share QR Code Modal */}
+      <ShareQrModal
+        visible={shareQrOpen}
+        onClose={() => setShareQrOpen(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -355,6 +373,25 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 11,
     fontWeight: '900',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  qrBtn: {
+    backgroundColor: 'rgba(0,196,255,0.16)',
+    borderWidth: 1,
+    borderColor: '#00C4FF',
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  qrBtnText: {
+    color: '#00C4FF',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
   clockPill: {
     flexDirection: 'row',
