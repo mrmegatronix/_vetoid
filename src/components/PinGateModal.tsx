@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TextInputKeyPressEvent,
@@ -13,41 +14,44 @@ import {
 interface PinGateModalProps {
   visible: boolean;
   expectedPin: string;
+  initialKeepUnlocked: boolean;
   title?: string;
-  onSuccess: () => void;
+  onSuccess: (keepUnlocked: boolean) => void;
   onCancel: () => void;
 }
 
-const PIN_LENGTH = 6;
-
 /**
  * Staff PIN gate implementing the pin-coded-access standard:
- * 6 segmented 48x56 cells, 10px gap, #00c4ff cyan focus/filled,
+ * Segmented 48x56 cells matching expectedPin length, 10px gap, #00c4ff cyan focus/filled,
  * #00ff88 Verified success state, #ff6b6b error + 500ms shake animation.
  */
 export const PinGateModal: React.FC<PinGateModalProps> = ({
   visible,
   expectedPin,
+  initialKeepUnlocked,
   title = 'STAFF PIN ACCESS',
   onSuccess,
   onCancel,
 }) => {
-  const [digits, setDigits] = useState<string[]>(Array(PIN_LENGTH).fill(''));
+  const pinLength = Math.max(4, expectedPin.length);
+  const [digits, setDigits] = useState<string[]>(Array(pinLength).fill(''));
   const [focusedIdx, setFocusedIdx] = useState<number>(0);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [statusText, setStatusText] = useState<string>('');
+  const [keepUnlocked, setKeepUnlocked] = useState<boolean>(initialKeepUnlocked);
   const inputRefs = useRef<Array<React.ComponentRef<typeof TextInput> | null>>([]);
   const shakeX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
-      setDigits(Array(PIN_LENGTH).fill(''));
+      setDigits(Array(pinLength).fill(''));
       setStatus('idle');
       setStatusText('');
       setFocusedIdx(0);
+      setKeepUnlocked(initialKeepUnlocked);
       setTimeout(() => inputRefs.current[0]?.focus(), 120);
     }
-  }, [visible]);
+  }, [visible, pinLength, initialKeepUnlocked]);
 
   const runShake = () => {
     shakeX.setValue(0);
@@ -67,14 +71,14 @@ export const PinGateModal: React.FC<PinGateModalProps> = ({
       setStatus('success');
       setStatusText('Verified');
       setTimeout(() => {
-        onSuccess();
+        onSuccess(keepUnlocked);
       }, 380);
     } else {
       setStatus('error');
       setStatusText('Invalid code, try again');
       runShake();
       setTimeout(() => {
-        setDigits(Array(PIN_LENGTH).fill(''));
+        setDigits(Array(pinLength).fill(''));
         setStatus('idle');
         setFocusedIdx(0);
         inputRefs.current[0]?.focus();
@@ -95,20 +99,19 @@ export const PinGateModal: React.FC<PinGateModalProps> = ({
       return;
     }
 
-    // Paste or multi-digit entry
     if (cleaned.length > 1) {
       const next = [...digits];
-      const slice = cleaned.slice(0, PIN_LENGTH - index);
+      const slice = cleaned.slice(0, pinLength - index);
       for (let i = 0; i < slice.length; i++) {
         next[index + i] = slice[i];
       }
       setDigits(next);
       setStatus('idle');
       setStatusText('');
-      const lastFilled = Math.min(index + slice.length, PIN_LENGTH - 1);
+      const lastFilled = Math.min(index + slice.length, pinLength - 1);
       inputRefs.current[lastFilled]?.focus();
       const joined = next.join('');
-      if (joined.length === PIN_LENGTH && !next.includes('')) {
+      if (joined.length === pinLength && !next.includes('')) {
         validateCode(joined);
       }
       return;
@@ -120,19 +123,16 @@ export const PinGateModal: React.FC<PinGateModalProps> = ({
     setStatus('idle');
     setStatusText('');
 
-    if (index < PIN_LENGTH - 1) {
+    if (index < pinLength - 1) {
       inputRefs.current[index + 1]?.focus();
     }
     const joined = next.join('');
-    if (joined.length === PIN_LENGTH && !next.includes('')) {
+    if (joined.length === pinLength && !next.includes('')) {
       validateCode(joined);
     }
   };
 
-  const handleKeyPress = (
-    index: number,
-    e: TextInputKeyPressEvent
-  ) => {
+  const handleKeyPress = (index: number, e: TextInputKeyPressEvent) => {
     if (status === 'success') return;
     if (e.nativeEvent.key === 'Backspace' && !digits[index] && index > 0) {
       const next = [...digits];
@@ -147,7 +147,7 @@ export const PinGateModal: React.FC<PinGateModalProps> = ({
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <Text style={styles.title}>{title}</Text>
-          <Text style={styles.hint}>Default Venue PIN: 123456</Text>
+          <Text style={styles.hint}>Enter {pinLength}-digit venue PIN</Text>
 
           <Animated.View
             style={[styles.cellRow, { transform: [{ translateX: shakeX }] }]}
@@ -166,7 +166,7 @@ export const PinGateModal: React.FC<PinGateModalProps> = ({
                   editable={status !== 'success'}
                   keyboardType="number-pad"
                   inputMode="numeric"
-                  maxLength={PIN_LENGTH}
+                  maxLength={pinLength}
                   selectTextOnFocus
                   secureTextEntry={false}
                   textContentType="oneTimeCode"
@@ -199,6 +199,19 @@ export const PinGateModal: React.FC<PinGateModalProps> = ({
             {statusText || ' '}
           </Text>
 
+          {/* Keep Unlocked Quick Standby Toggle */}
+          <View style={styles.standbyRow}>
+            <View style={styles.standbyTextWrap}>
+              <Text style={styles.standbyLabel}>Keep unlocked for quick standby</Text>
+              <Text style={styles.standbySub}>Skip PIN during active shift</Text>
+            </View>
+            <Switch
+              value={keepUnlocked}
+              onValueChange={setKeepUnlocked}
+              trackColor={{ false: '#374151', true: '#00C4FF' }}
+            />
+          </View>
+
           <Pressable style={styles.cancelBtn} onPress={onCancel}>
             <Text style={styles.cancelText}>CANCEL</Text>
           </Pressable>
@@ -218,7 +231,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 380,
     backgroundColor: '#0A0D12',
     borderRadius: 18,
     borderWidth: 1,
@@ -240,7 +253,7 @@ const styles = StyleSheet.create({
   cellRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 8,
+    marginTop: 6,
   },
   cell: {
     width: 48,
@@ -288,6 +301,30 @@ const styles = StyleSheet.create({
   },
   statusError: {
     color: '#FF6B6B',
+  },
+  standbyRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#131820',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  standbyTextWrap: {
+    flex: 1,
+  },
+  standbyLabel: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  standbySub: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    marginTop: 1,
   },
   cancelBtn: {
     marginTop: 4,

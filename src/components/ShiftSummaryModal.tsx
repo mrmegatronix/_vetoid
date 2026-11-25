@@ -15,8 +15,11 @@ interface ShiftSummaryModalProps {
   visible: boolean;
   tally: ShiftTally;
   settings: VenueSettings;
+  isUnlocked: boolean;
   onUpdateSettings: (next: VenueSettings) => void;
   onResetShift: () => void;
+  onEnterStandby: () => void;
+  onLockNow: () => void;
   onClose: () => void;
 }
 
@@ -24,8 +27,11 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
   visible,
   tally,
   settings,
+  isUnlocked,
   onUpdateSettings,
   onResetShift,
+  onEnterStandby,
+  onLockNow,
   onClose,
 }) => {
   const [showSignage, setShowSignage] = useState(false);
@@ -91,6 +97,37 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
                 trackColor={{ false: '#374151', true: '#00C4FF' }}
               />
             </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextWrap}>
+                <Text style={styles.settingTitle}>Keep Unlocked (Quick Standby)</Text>
+                <Text style={styles.settingSub}>
+                  Stay unlocked during shift for instant 1-tap access &amp; OLED standby
+                </Text>
+              </View>
+              <Switch
+                value={settings.keepUnlockedStandby}
+                onValueChange={(v) =>
+                  onUpdateSettings({ ...settings, keepUnlockedStandby: v })
+                }
+                trackColor={{ false: '#374151', true: '#00C4FF' }}
+              />
+            </View>
+
+            {isUnlocked && (
+              <View style={styles.standbyActionsRow}>
+                <Pressable style={styles.standbyBtn} onPress={onEnterStandby}>
+                  <Text style={styles.standbyBtnText} numberOfLines={1}>
+                    QUICK STANDBY
+                  </Text>
+                </Pressable>
+                <Pressable style={styles.lockBtn} onPress={onLockNow}>
+                  <Text style={styles.lockBtnText} numberOfLines={1}>
+                    LOCK NOW
+                  </Text>
+                </Pressable>
+              </View>
+            )}
 
             <View style={styles.settingRow}>
               <View style={styles.settingTextWrap}>
@@ -259,6 +296,40 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 12,
     marginTop: 2,
+  },
+  standbyActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  standbyBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(0,196,255,0.16)',
+    borderWidth: 1,
+    borderColor: '#00C4FF',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  standbyBtnText: {
+    color: '#00C4FF',
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.6,
+  },
+  lockBtn: {
+    flex: 1,
+    backgroundColor: '#1F2430',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  lockBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+    letterSpacing: 0.6,
   },
   signageToggle: {
     backgroundColor: '#131820',

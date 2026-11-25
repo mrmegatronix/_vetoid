@@ -1,3 +1,5 @@
+import { ENV_STAFF_PIN } from '../config/env';
+
 export type AcceptedDocType =
   | 'NZ_DRIVER_LICENCE'
   | 'PASSPORT'
@@ -57,14 +59,16 @@ export interface VenueSettings {
   showUnder25Cue: boolean;
   requireFaceConfirm: boolean;
   leftHandedMode: boolean;
+  keepUnlockedStandby: boolean;
   minimumAge: number;
 }
 
 export const DEFAULT_VENUE_SETTINGS: VenueSettings = {
-  staffPin: '123456',
+  staffPin: ENV_STAFF_PIN,
   autoResetSeconds: 3,
   showUnder25Cue: true,
   requireFaceConfirm: false,
   leftHandedMode: false,
+  keepUnlockedStandby: true,
   minimumAge: 18,
 };

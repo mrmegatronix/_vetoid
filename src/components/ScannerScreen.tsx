@@ -31,6 +31,7 @@ import {
   VerificationResult,
 } from '../types/verification';
 import { triggerVerdictHaptics } from '../utils/haptics';
+import { InfoModal } from './InfoModal';
 import { ManualDobModal } from './ManualDobModal';
 import { PinGateModal } from './PinGateModal';
 import { ShareQrModal } from './ShareQrModal';
@@ -46,6 +47,9 @@ export const ScannerScreen: React.FC = () => {
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
   const [shareQrOpen, setShareQrOpen] = useState(false);
+  const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [isSessionUnlocked, setIsSessionUnlocked] = useState(false);
+  const [standbyDimmed, setStandbyDimmed] = useState(false);
   const [tally, setTally] = useState<ShiftTally>(createEmptyShiftTally());
   const [settings, setSettings] = useState<VenueSettings>(DEFAULT_VENUE_SETTINGS);
   const [clockTampered, setClockTampered] = useState(false);
@@ -119,6 +123,35 @@ export const ScannerScreen: React.FC = () => {
     setTally(fresh);
   };
 
+  const handleOpenShift = () => {
+    if (isSessionUnlocked && settings.keepUnlockedStandby) {
+      setShiftModalOpen(true);
+    } else {
+      setPinModalOpen(true);
+    }
+  };
+
+  const handlePinUnlocked = async (keepUnlocked: boolean) => {
+    setPinModalOpen(false);
+    setIsSessionUnlocked(keepUnlocked);
+    if (keepUnlocked !== settings.keepUnlockedStandby) {
+      await handleUpdateSettings({ ...settings, keepUnlockedStandby: keepUnlocked });
+    }
+    setShiftModalOpen(true);
+  };
+
+  const handleLockSession = () => {
+    setIsSessionUnlocked(false);
+    setStandbyDimmed(false);
+    setShiftModalOpen(false);
+  };
+
+  const handleEnterStandby = () => {
+    setShiftModalOpen(false);
+    setTorchOn(false);
+    setStandbyDimmed(true);
+  };
+
   const cameraReady = permission?.granted === true;
 
   const bottomControls = [
@@ -142,9 +175,11 @@ export const ScannerScreen: React.FC = () => {
     },
     {
       key: 'shift',
-      label: `SHIFT (${tally.totalScanned})`,
-      active: false,
-      onPress: () => setPinModalOpen(true),
+      label: isSessionUnlocked && settings.keepUnlockedStandby
+        ? `SHIFT (${tally.totalScanned}) • OPEN`
+        : `SHIFT (${tally.totalScanned})`,
+      active: isSessionUnlocked && settings.keepUnlockedStandby,
+      onPress: handleOpenShift,
     },
   ];
 
@@ -164,6 +199,24 @@ export const ScannerScreen: React.FC = () => {
         </View>
 
         <View style={styles.headerRight}>
+          {isSessionUnlocked && settings.keepUnlockedStandby && (
+            <Pressable
+              style={styles.standbyPillBtn}
+              onPress={handleEnterStandby}
+              accessibilityRole="button"
+              accessibilityLabel="Enter quick standby"
+            >
+              <Text style={styles.standbyPillText}>STANDBY</Text>
+            </Pressable>
+          )}
+          <Pressable
+            style={styles.infoBtn}
+            onPress={() => setInfoModalOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="How to use VetoID"
+          >
+            <Text style={styles.infoBtnText}>INFO</Text>
+          </Pressable>
           <Pressable
             style={styles.qrBtn}
             onPress={() => setShareQrOpen(true)}
@@ -178,7 +231,6 @@ export const ScannerScreen: React.FC = () => {
               <Text style={{ opacity: clockState.colonOn ? 1 : 0 }}>:</Text>
               {clockState.mm}
             </Text>
-            <Text style={styles.zeroPiiTag}>ZERO-PII</Text>
           </View>
         </View>
       </View>
@@ -193,7 +245,7 @@ export const ScannerScreen: React.FC = () => {
 
       {/* Always-Hot Live Camera Viewfinder */}
       <View style={styles.viewfinderWrap}>
-        {cameraReady && Platform.OS !== 'web' ? (
+        {cameraReady && !standbyDimmed && Platform.OS !== 'web' ? (
           <CameraView
             style={StyleSheet.absoluteFill}
             facing="back"
@@ -313,11 +365,9 @@ export const ScannerScreen: React.FC = () => {
       <PinGateModal
         visible={pinModalOpen}
         expectedPin={settings.staffPin}
+        initialKeepUnlocked={settings.keepUnlockedStandby}
         onCancel={() => setPinModalOpen(false)}
-        onSuccess={() => {
-          setPinModalOpen(false);
-          setShiftModalOpen(true);
-        }}
+        onSuccess={handlePinUnlocked}
       />
 
       {/* PIN-Gated Anonymous Shift Summary & Settings */}
@@ -325,9 +375,18 @@ export const ScannerScreen: React.FC = () => {
         visible={shiftModalOpen}
         tally={tally}
         settings={settings}
+        isUnlocked={isSessionUnlocked && settings.keepUnlockedStandby}
         onUpdateSettings={handleUpdateSettings}
         onResetShift={handleResetShift}
+        onEnterStandby={handleEnterStandby}
+        onLockNow={handleLockSession}
         onClose={() => setShiftModalOpen(false)}
+      />
+
+      {/* How to Use & NZ Compliance Info Modal */}
+      <InfoModal
+        visible={infoModalOpen}
+        onClose={() => setInfoModalOpen(false)}
       />
 
       {/* Offline Share QR Code Modal */}
@@ -335,6 +394,33 @@ export const ScannerScreen: React.FC = () => {
         visible={shareQrOpen}
         onClose={() => setShareQrOpen(false)}
       />
+
+      {/* OLED Quick Standby Blackout Overlay (1-tap instant wake, stays unlocked) */}
+      {standbyDimmed && (
+        <Pressable
+          style={styles.standbyOverlay}
+          onPress={() => setStandbyDimmed(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Wake VetoID from standby"
+        >
+          <Text style={styles.standbyBrand}>VetoID • QUICK STANDBY</Text>
+          <Text style={styles.standbyClock}>
+            {clockState.hh}
+            <Text style={{ opacity: clockState.colonOn ? 1 : 0 }}>:</Text>
+            {clockState.mm}
+          </Text>
+          <Text style={styles.standbyWakeHint}>TAP ANYWHERE TO WAKE SCANNER</Text>
+          <Pressable
+            style={styles.standbyLockBtn}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleLockSession();
+            }}
+          >
+            <Text style={styles.standbyLockText}>LOCK SESSION</Text>
+          </Pressable>
+        </Pressable>
+      )}
     </SafeAreaView>
   );
 };
@@ -377,21 +463,92 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+  },
+  standbyPillBtn: {
+    backgroundColor: 'rgba(0,255,136,0.16)',
+    borderWidth: 1,
+    borderColor: '#00FF88',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  standbyPillText: {
+    color: '#00FF88',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  infoBtn: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  infoBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   qrBtn: {
     backgroundColor: 'rgba(0,196,255,0.16)',
     borderWidth: 1,
     borderColor: '#00C4FF',
     borderRadius: 999,
-    paddingHorizontal: 11,
+    paddingHorizontal: 9,
     paddingVertical: 6,
   },
   qrBtnText: {
     color: '#00C4FF',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
+  },
+  standbyOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#000000',
+    zIndex: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    padding: 24,
+  },
+  standbyBrand: {
+    color: '#00FF88',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+  },
+  standbyClock: {
+    color: '#FFFFFF',
+    fontSize: 64,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+    opacity: 0.85,
+  },
+  standbyWakeHint: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  standbyLockBtn: {
+    marginTop: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#11161F',
+  },
+  standbyLockText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
   clockPill: {
     flexDirection: 'row',

@@ -7,7 +7,8 @@ Offline-first, zero-retention, cross-platform mobile ID verification app built f
 - **Hard Rejections:** Overseas driver licences, expired IDs, temporary paper licences, student IDs, SuperGold, Community Services, and Firearms licences.
 - **Zero-PII RAM-Only Processing:** Never writes patron names, photos, or ID numbers to disk; Android `FLAG_SECURE` / iOS screen-capture prevention enabled.
 - **Nightlife Ergonomics:** OLED `#000000` UI, torch toggle, 4-state full-screen peripheral verdicts (`PASS 18+`, `UNDER 18`, `EXPIRED`, `NOT ACCEPTED`), distinct haptics, `<25` Ask-25 cue, `SHOW PATRON` legal de-escalation card, and IPP 4 Manual DOB fallback.
-- **PIN-Gated Shift Tally:** 6-digit staff PIN gate (default `123456`) protecting anonymous shift counters, venue door settings, and OPC IPP 3 entry signage notice.
+- **PIN-Gated Shift Tally & Quick Standby:** Staff PIN loaded from `.env` (`EXPO_PUBLIC_STAFF_PIN=3528`), with Keep-Unlocked Quick Standby OLED blackout mode and instant 1-tap wake.
+- **Built-In Info Guide & Offline QR Share:** One-tap `INFO` how-to / NZ SSAA 2012 reference page and offline `QR` share modal.
 
 ## Commands
 ```bash

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ENV_STAFF_PIN } from '../config/env';
 import {
   DEFAULT_VENUE_SETTINGS,
   ShiftTally,
@@ -87,10 +88,14 @@ export async function resetShiftTally(): Promise<ShiftTally> {
 export async function loadVenueSettings(): Promise<VenueSettings> {
   try {
     const raw = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) return DEFAULT_VENUE_SETTINGS;
-    return { ...DEFAULT_VENUE_SETTINGS, ...JSON.parse(raw) };
+    if (!raw) return { ...DEFAULT_VENUE_SETTINGS, staffPin: ENV_STAFF_PIN };
+    return {
+      ...DEFAULT_VENUE_SETTINGS,
+      ...JSON.parse(raw),
+      staffPin: ENV_STAFF_PIN,
+    };
   } catch {
-    return DEFAULT_VENUE_SETTINGS;
+    return { ...DEFAULT_VENUE_SETTINGS, staffPin: ENV_STAFF_PIN };
   }
 }
 
