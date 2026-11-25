@@ -37,6 +37,10 @@ import { PinGateModal } from './PinGateModal';
 import { ShareQrModal } from './ShareQrModal';
 import { ShiftSummaryModal } from './ShiftSummaryModal';
 import { VerdictOverlay } from './VerdictOverlay';
+import {
+  WebCameraScanner,
+  WebCameraScannerHandle,
+} from './WebCameraScanner';
 
 export const ScannerScreen: React.FC = () => {
   const [permission, requestPermission] = useCameraPermissions();
@@ -50,12 +54,15 @@ export const ScannerScreen: React.FC = () => {
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const [isSessionUnlocked, setIsSessionUnlocked] = useState(false);
   const [standbyDimmed, setStandbyDimmed] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState<string>('');
   const [tally, setTally] = useState<ShiftTally>(createEmptyShiftTally());
   const [settings, setSettings] = useState<VenueSettings>(DEFAULT_VENUE_SETTINGS);
   const [clockTampered, setClockTampered] = useState(false);
   const [clockState, setClockState] = useState({ hh: '00', mm: '00', colonOn: true });
 
   const clockGuardRef = useRef(new ClockTamperGuard());
+  const webScannerRef = useRef<WebCameraScannerHandle | null>(null);
 
   useEffect(() => {
     loadShiftTally().then(setTally);
@@ -152,6 +159,36 @@ export const ScannerScreen: React.FC = () => {
     setStandbyDimmed(true);
   };
 
+  const handleScanLiveFrame = async () => {
+    if (scanning) return;
+    if (Platform.OS !== 'web') {
+      setDrillModalOpen(true);
+      return;
+    }
+    if (!webScannerRef.current) return;
+
+    setScanning(true);
+    setScanStatus('CAPTURING FRAME...');
+    try {
+      const { text, error } = await webScannerRef.current.scanFrame();
+      if (error) {
+        setScanStatus(error);
+        setTimeout(() => setScanStatus(''), 2600);
+        return;
+      }
+      if (!text.trim()) {
+        setScanStatus('NO TEXT DETECTED — HOLD STEADY & TRY AGAIN');
+        setTimeout(() => setScanStatus(''), 2600);
+        return;
+      }
+      setScanStatus('');
+      const res = evaluateScannedDocumentText(text, undefined, settings.minimumAge);
+      await presentVerdict(res);
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const cameraReady = permission?.granted === true;
 
   const bottomControls = [
@@ -245,7 +282,14 @@ export const ScannerScreen: React.FC = () => {
 
       {/* Always-Hot Live Camera Viewfinder */}
       <View style={styles.viewfinderWrap}>
-        {cameraReady && !standbyDimmed && Platform.OS !== 'web' ? (
+        {Platform.OS === 'web' ? (
+          <WebCameraScanner
+            ref={webScannerRef}
+            active={!standbyDimmed && !activeVerdict}
+            torchOn={torchOn}
+            onStatusChange={setScanStatus}
+          />
+        ) : cameraReady && !standbyDimmed ? (
           <CameraView
             style={StyleSheet.absoluteFill}
             facing="back"
@@ -253,21 +297,13 @@ export const ScannerScreen: React.FC = () => {
           />
         ) : (
           <View style={styles.cameraFallback}>
-            <Text style={styles.fallbackTitle}>
-              {Platform.OS === 'web'
-                ? 'WEB PREVIEW MODE'
-                : 'CAMERA PERMISSION REQUIRED'}
-            </Text>
+            <Text style={styles.fallbackTitle}>CAMERA PERMISSION REQUIRED</Text>
             <Text style={styles.fallbackSub}>
-              {Platform.OS === 'web'
-                ? 'Use TEST / DRILL or MANUAL DOB below to test all 4 NZ SSAA 2012 verdicts.'
-                : 'VetoID processes frames strictly in RAM. Zero photos are saved.'}
+              VetoID processes frames strictly in RAM. Zero photos are saved.
             </Text>
-            {Platform.OS !== 'web' && (
-              <Pressable style={styles.permBtn} onPress={requestPermission}>
-                <Text style={styles.permBtnText}>ENABLE CAMERA</Text>
-              </Pressable>
-            )}
+            <Pressable style={styles.permBtn} onPress={requestPermission}>
+              <Text style={styles.permBtnText}>ENABLE CAMERA</Text>
+            </Pressable>
           </View>
         )}
 
@@ -280,7 +316,7 @@ export const ScannerScreen: React.FC = () => {
             <View style={[styles.corner, styles.br]} />
           </View>
           <Text style={styles.reticleHint} numberOfLines={1}>
-            ALIGN NZDL • KIWI ACCESS • PASSPORT MRZ
+            {scanStatus || 'ALIGN NZDL • KIWI ACCESS • PASSPORT MRZ'}
           </Text>
           <Text style={styles.glareHint} numberOfLines={1}>
             TILT SLIGHTLY TO AVOID LAMINATE GLARE
@@ -290,6 +326,17 @@ export const ScannerScreen: React.FC = () => {
 
       {/* Bottom-Third One-Handed Thumb Zone */}
       <View style={styles.thumbZone}>
+        <Pressable
+          style={[styles.scanPrimaryBtn, scanning && styles.scanPrimaryBtnBusy]}
+          onPress={handleScanLiveFrame}
+          disabled={scanning}
+          accessibilityRole="button"
+        >
+          <Text style={styles.scanPrimaryText} numberOfLines={1}>
+            {scanning ? 'SCANNING ID...' : 'SCAN ID'}
+          </Text>
+        </Pressable>
+
         <View style={styles.buttonGrid}>
           {orderedControls.map((btn) => (
             <Pressable
@@ -668,9 +715,28 @@ const styles = StyleSheet.create({
   },
   thumbZone: {
     paddingHorizontal: 12,
-    paddingTop: 12,
+    paddingTop: 10,
     paddingBottom: 14,
     backgroundColor: '#000000',
+    gap: 10,
+  },
+  scanPrimaryBtn: {
+    width: '100%',
+    minHeight: 58,
+    borderRadius: 14,
+    backgroundColor: '#00C4FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanPrimaryBtnBusy: {
+    backgroundColor: '#0284C7',
+    opacity: 0.85,
+  },
+  scanPrimaryText: {
+    color: '#000000',
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: 1.2,
   },
   buttonGrid: {
     flexDirection: 'row',

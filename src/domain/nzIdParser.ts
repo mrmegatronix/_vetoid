@@ -33,13 +33,13 @@ const MONTH_MAP: Record<string, number> = {
 };
 
 /**
- * Parses common NZ printed date strings: DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY, or DD MMM YYYY.
+ * Parses common NZ printed date strings: DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY, DD MM YYYY, or DD MMM YYYY.
  */
 export function parsePrintedNzDate(raw: string): CalendarDate | null {
   const clean = raw.trim().toUpperCase();
 
-  // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
-  const numeric = clean.match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b/);
+  // DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, or DD MM YYYY
+  const numeric = clean.match(/\b(\d{1,2})[\/\-\.\s](\d{1,2})[\/\-\.\s](\d{4})\b/);
   if (numeric) {
     const candidate: CalendarDate = {
       day: Number(numeric[1]),
@@ -49,8 +49,8 @@ export function parsePrintedNzDate(raw: string): CalendarDate | null {
     return isValidCalendarDate(candidate) ? candidate : null;
   }
 
-  // DD MMM YYYY (e.g. 14 FEB 2002)
-  const named = clean.match(/\b(\d{1,2})\s+([A-Z]{3,4})\s+(\d{4})\b/);
+  // DD MMM YYYY or DD-MMM-YYYY (e.g. 14 FEB 2002)
+  const named = clean.match(/\b(\d{1,2})[\s\-]+([A-Z]{3,4})[\s\-]+(\d{4})\b/);
   if (named && MONTH_MAP[named[2]]) {
     const candidate: CalendarDate = {
       day: Number(named[1]),
@@ -61,6 +61,44 @@ export function parsePrintedNzDate(raw: string): CalendarDate | null {
   }
 
   return null;
+}
+
+/**
+ * Extracts all valid calendar dates in text (fallback for noisy camera OCR on NZDL/Kiwi Access).
+ */
+function extractAllPrintedDates(text: string): CalendarDate[] {
+  const found: CalendarDate[] = [];
+  const regex =
+    /\b(\d{1,2}[\/\-\.\s]\d{1,2}[\/\-\.\s]\d{4}|\d{1,2}[\s\-]+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)[\s\-]+\d{4})\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    const parsed = parsePrintedNzDate(m[1]);
+    if (parsed && parsed.year >= 1910 && parsed.year <= 2060) {
+      found.push(parsed);
+    }
+  }
+  return found;
+}
+
+function inferDobAndExpiryFromDates(
+  dates: CalendarDate[],
+  referenceDate: CalendarDate
+): { dob: CalendarDate | null; expiry: CalendarDate | null } {
+  if (dates.length === 0) return { dob: null, expiry: null };
+  const sorted = [...dates].sort((a, b) =>
+    a.year !== b.year
+      ? a.year - b.year
+      : a.month !== b.month
+      ? a.month - b.month
+      : a.day - b.day
+  );
+  // Earliest plausible birth date (at least 10 years ago)
+  const dob =
+    sorted.find((d) => d.year <= referenceDate.year - 10 && d.year >= 1910) ?? null;
+  // Latest date at least 15 years after DOB is expiry
+  const latest = sorted[sorted.length - 1];
+  const expiry = dob && latest.year >= dob.year + 15 ? latest : null;
+  return { dob, expiry };
 }
 
 function buildResult(params: {
@@ -251,8 +289,13 @@ export function evaluateScannedDocumentText(
   const isKiwiAccess = /\bKIWI\s+ACCESS\b/.test(upper);
   const isLegacy18Plus = /\b(HOSPITALITY\s+NZ|HANZ|18\+\s+CARD)\b/.test(upper);
   if (isKiwiAccess || isLegacy18Plus) {
-    const dob = extractLabeledDate(upper, /(?:DOB|DATE\s+OF\s+BIRTH|BORN)[:\s]*([^\n]+)/);
-    const expiry = extractLabeledDate(upper, /(?:EXP|EXPIRY|EXPIRES|VALID\s+UNTIL)[:\s]*([^\n]+)/);
+    let dob = extractLabeledDate(upper, /(?:DOB|DATE\s+OF\s+BIRTH|BORN)[:\s]*([^\n]+)/);
+    let expiry = extractLabeledDate(upper, /(?:EXP|EXPIRY|EXPIRES|VALID\s+UNTIL)[:\s]*([^\n]+)/);
+    if (!dob) {
+      const inferred = inferDobAndExpiryFromDates(extractAllPrintedDates(upper), referenceDate);
+      dob = inferred.dob;
+      expiry = expiry ?? inferred.expiry;
+    }
     if (dob) {
       return buildResult({
         dob,
@@ -270,14 +313,19 @@ export function evaluateScannedDocumentText(
   // Format check: NZDL licence number is 2 letters + 6 digits (e.g. DL123456), 3-digit version
   const hasNzdlNumber = /\b[A-Z]{2}\d{6}\b/.test(upper);
   if (mentionsNewZealand || hasNzdlNumber) {
-    const dob = extractLabeledDate(
+    let dob = extractLabeledDate(
       upper,
       /(?:3\.?\s*DOB|DOB|DATE\s+OF\s+BIRTH)[:\s]*([^\n]+)/
     );
-    const expiry = extractLabeledDate(
+    let expiry = extractLabeledDate(
       upper,
       /(?:4B\.?\s*EXP|4B|EXPIRY|EXPIRES|EXP)[:\s]*([^\n]+)/
     );
+    if (!dob) {
+      const inferred = inferDobAndExpiryFromDates(extractAllPrintedDates(upper), referenceDate);
+      dob = inferred.dob;
+      expiry = expiry ?? inferred.expiry;
+    }
     if (dob) {
       return buildResult({
         dob,
