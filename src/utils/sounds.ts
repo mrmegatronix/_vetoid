@@ -62,6 +62,13 @@ export function playVerdictSound(verdict: VerdictStatus, enabled: boolean): void
         playTone(210, 0.14, 0.18, 'sawtooth', 0.24);
         playTone(185, 0.24, 0.36, 'sawtooth', 0.28);
         break;
+      case 'BANNED_TRESPASSED':
+        // Urgent high-low siren alarm for trespassed/banned patron
+        playTone(620, 0.14, 0, 'sawtooth', 0.28);
+        playTone(310, 0.14, 0.14, 'sawtooth', 0.28);
+        playTone(620, 0.14, 0.28, 'sawtooth', 0.28);
+        playTone(310, 0.22, 0.42, 'sawtooth', 0.3);
+        break;
       case 'EXPIRED':
         // Descending amber warning double-beep
         playTone(520, 0.14, 0, 'square', 0.16);

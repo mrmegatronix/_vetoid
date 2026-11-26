@@ -28,6 +28,14 @@ import {
   updateShiftStaffRole,
 } from '../storage/shiftStore';
 import {
+  addTrespassRecord,
+  isTrespassRecordActive,
+  loadTrespassRecords,
+  matchTrespassNotice,
+  removeTrespassRecord,
+  TrespassRecord,
+} from '../storage/trespassStore';
+import {
   DEFAULT_VENUE_SETTINGS,
   ShiftBackupRecord,
   ShiftTally,
@@ -36,6 +44,8 @@ import {
   VerificationResult,
 } from '../types/verification';
 import { triggerVerdictHaptics } from '../utils/haptics';
+import { recognizeTextFromNativeImage } from '../utils/nativeOcr';
+import { printTestIdsSheet } from '../utils/printTestIds';
 import {
   playScanShutterSound,
   playUnlockSound,
@@ -46,6 +56,7 @@ import { ManualDobModal } from './ManualDobModal';
 import { PinGateModal } from './PinGateModal';
 import { ShareQrModal } from './ShareQrModal';
 import { ShiftSummaryModal } from './ShiftSummaryModal';
+import { TrespassModal } from './TrespassModal';
 import { VerdictOverlay } from './VerdictOverlay';
 import {
   WebCameraScanner,
@@ -63,6 +74,7 @@ export const ScannerScreen: React.FC = () => {
   const [shareQrOpen, setShareQrOpen] = useState(false);
   const [qrMode, setQrMode] = useState<'patron' | 'app'>('patron');
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [trespassModalOpen, setTrespassModalOpen] = useState(false);
   const [isSessionUnlocked, setIsSessionUnlocked] = useState(false);
   const [standbyDimmed, setStandbyDimmed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -70,16 +82,19 @@ export const ScannerScreen: React.FC = () => {
   const [scanStatus, setScanStatus] = useState<string>('');
   const [tally, setTally] = useState<ShiftTally>(createEmptyShiftTally());
   const [backups, setBackups] = useState<ShiftBackupRecord[]>([]);
+  const [trespassRecords, setTrespassRecords] = useState<TrespassRecord[]>([]);
   const [settings, setSettings] = useState<VenueSettings>(DEFAULT_VENUE_SETTINGS);
   const [clockTampered, setClockTampered] = useState(false);
   const [clockState, setClockState] = useState({ hh: '00', mm: '00', colonOn: true });
 
   const clockGuardRef = useRef(new ClockTamperGuard());
   const webScannerRef = useRef<WebCameraScannerHandle | null>(null);
+  const nativeCameraRef = useRef<React.ComponentRef<typeof CameraView> | null>(null);
 
   useEffect(() => {
     loadShiftTally().then(setTally);
     loadShiftBackups().then(setBackups);
+    loadTrespassRecords().then(setTrespassRecords);
     loadVenueSettings().then(setSettings);
   }, []);
 
@@ -129,9 +144,36 @@ export const ScannerScreen: React.FC = () => {
     setActiveVerdict(null);
   }, [tally]);
 
+  const evaluateWithTrespassCheck = useCallback(
+    (rawOcrText: string): VerificationResult => {
+      const base = evaluateScannedDocumentText(
+        rawOcrText,
+        undefined,
+        settings.minimumAge
+      );
+      const bannedMatch = matchTrespassNotice(
+        rawOcrText,
+        base.dobDisplay,
+        trespassRecords
+      );
+      if (bannedMatch) {
+        return {
+          ...base,
+          verdict: 'BANNED_TRESPASSED',
+          reasonTitle: `TRESPASSED — ${bannedMatch.reason.toUpperCase()}`,
+          patronLegalNotice:
+            'A current Trespass Notice under the NZ Trespass Act 1980 is in force for this premises. Please leave immediately.',
+          tactileCue: `Notice expires ${bannedMatch.expiresDateDisplay} • DO NOT ADMIT — Notify Duty Manager.`,
+        };
+      }
+      return base;
+    },
+    [settings.minimumAge, trespassRecords]
+  );
+
   const handleRunPracticeCard = (rawOcrText: string) => {
     setDrillModalOpen(false);
-    const res = evaluateScannedDocumentText(rawOcrText, undefined, settings.minimumAge);
+    const res = evaluateWithTrespassCheck(rawOcrText);
     presentVerdict(res);
   };
 
@@ -205,10 +247,45 @@ export const ScannerScreen: React.FC = () => {
 
   const handleScanLiveFrame = async () => {
     if (scanning) return;
+
+    // Native Android/iOS live camera capture + on-device Google ML Kit OCR
     if (Platform.OS !== 'web') {
-      setDrillModalOpen(true);
+      if (!nativeCameraRef.current) {
+        setScanStatus('CAMERA NOT READY — CHECK PERMISSION');
+        setTimeout(() => setScanStatus(''), 2400);
+        return;
+      }
+      setScanning(true);
+      playScanShutterSound(settings.soundEffectsEnabled);
+      setScanStatus('SCANNING ID ON-DEVICE...');
+      try {
+        const photo = await nativeCameraRef.current.takePictureAsync({
+          quality: 0.7,
+          skipProcessing: false,
+        });
+        if (!photo?.uri) {
+          setScanStatus('CAPTURE FAILED — TRY AGAIN');
+          setTimeout(() => setScanStatus(''), 2400);
+          return;
+        }
+        const ocrText = await recognizeTextFromNativeImage(photo.uri);
+        if (!ocrText.trim()) {
+          setScanStatus('NO TEXT DETECTED — HOLD STEADY & TRY AGAIN');
+          setTimeout(() => setScanStatus(''), 2600);
+          return;
+        }
+        setScanStatus('');
+        const res = evaluateWithTrespassCheck(ocrText);
+        await presentVerdict(res);
+      } catch {
+        setScanStatus('SCAN FAILED — USE MANUAL DOB OR RETRY');
+        setTimeout(() => setScanStatus(''), 2600);
+      } finally {
+        setScanning(false);
+      }
       return;
     }
+
     if (!webScannerRef.current) return;
 
     setScanning(true);
@@ -227,7 +304,7 @@ export const ScannerScreen: React.FC = () => {
         return;
       }
       setScanStatus('');
-      const res = evaluateScannedDocumentText(text, undefined, settings.minimumAge);
+      const res = evaluateWithTrespassCheck(text);
       await presentVerdict(res);
     } finally {
       setScanning(false);
@@ -351,6 +428,7 @@ export const ScannerScreen: React.FC = () => {
           />
         ) : cameraReady && !standbyDimmed ? (
           <CameraView
+            ref={nativeCameraRef}
             style={StyleSheet.absoluteFill}
             facing="back"
             enableTorch={torchOn}
@@ -455,8 +533,16 @@ export const ScannerScreen: React.FC = () => {
               </Pressable>
             </View>
             <Text style={styles.drillSub}>
-              Tap any synthetic NZ test ID to preview the full-screen verdict &amp; haptics.
+              Tap any synthetic NZ test ID to test verdicts, or print A4 practice cards for staff.
             </Text>
+            <Pressable
+              style={styles.printDrillBtn}
+              onPress={() => {
+                printTestIdsSheet().catch(() => {});
+              }}
+            >
+              <Text style={styles.printDrillText}>PRINT A4 TEST IDs TO PRINTER</Text>
+            </Pressable>
             <ScrollView contentContainerStyle={styles.drillList}>
               {PRACTICE_DRILL_CARDS.map((card) => (
                 <Pressable
@@ -487,15 +573,39 @@ export const ScannerScreen: React.FC = () => {
         visible={shiftModalOpen}
         tally={tally}
         backups={backups}
+        trespassCount={trespassRecords.filter(isTrespassRecordActive).length}
         settings={settings}
         isUnlocked={isSessionUnlocked && settings.keepUnlockedStandby}
         onUpdateSettings={handleUpdateSettings}
         onChangeStaffRole={handleChangeStaffRole}
         onEndShiftAndBackup={handleEndShiftAndBackup}
         onResetShift={handleResetShift}
+        onOpenTrespassRegister={() => {
+          setShiftModalOpen(false);
+          setTrespassModalOpen(true);
+        }}
+        onPrintTestIds={() => {
+          printTestIdsSheet().catch(() => {});
+        }}
         onEnterStandby={handleEnterStandby}
         onLockNow={handleLockSession}
         onClose={() => setShiftModalOpen(false)}
+      />
+
+      {/* PIN-Gated Trespassed / Banned Patron Register */}
+      <TrespassModal
+        visible={trespassModalOpen}
+        records={trespassRecords}
+        staffRole={tally.staffRole}
+        onAddRecord={async (input) => {
+          const next = await addTrespassRecord(trespassRecords, input);
+          setTrespassRecords(next);
+        }}
+        onRemoveRecord={async (id) => {
+          const next = await removeTrespassRecord(trespassRecords, id);
+          setTrespassRecords(next);
+        }}
+        onClose={() => setTrespassModalOpen(false)}
       />
 
       {/* How to Use & NZ Compliance Info Modal */}
@@ -871,6 +981,20 @@ const styles = StyleSheet.create({
   drillSub: {
     color: '#9CA3AF',
     fontSize: 13,
+  },
+  printDrillBtn: {
+    backgroundColor: 'rgba(0,196,255,0.16)',
+    borderWidth: 1,
+    borderColor: '#00C4FF',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  printDrillText: {
+    color: '#00C4FF',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
   drillList: {
     gap: 10,

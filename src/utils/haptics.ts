@@ -23,6 +23,13 @@ export async function triggerVerdictHaptics(verdict: VerdictStatus): Promise<voi
         await sleep(110);
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         break;
+      case 'BANNED_TRESPASSED':
+        // Four urgent heavy pulses for trespassed patron alert
+        for (let i = 0; i < 4; i++) {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          await sleep(95);
+        }
+        break;
       case 'EXPIRED':
       case 'INVALID_DOC':
         // Two medium pulses prompting a quick visual glance

@@ -24,12 +24,15 @@ interface ShiftSummaryModalProps {
   visible: boolean;
   tally: ShiftTally;
   backups: ShiftBackupRecord[];
+  trespassCount: number;
   settings: VenueSettings;
   isUnlocked: boolean;
   onUpdateSettings: (next: VenueSettings) => void;
   onChangeStaffRole: (role: StaffRole) => void;
   onEndShiftAndBackup: () => Promise<ShiftBackupRecord>;
   onResetShift: () => void;
+  onOpenTrespassRegister: () => void;
+  onPrintTestIds: () => void;
   onEnterStandby: () => void;
   onLockNow: () => void;
   onClose: () => void;
@@ -88,12 +91,15 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
   visible,
   tally,
   backups,
+  trespassCount,
   settings,
   isUnlocked,
   onUpdateSettings,
   onChangeStaffRole,
   onEndShiftAndBackup,
   onResetShift,
+  onOpenTrespassRegister,
+  onPrintTestIds,
   onEnterStandby,
   onLockNow,
   onClose,
@@ -160,6 +166,21 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
               <StatTile label="EXPIRED" value={tally.expired} accent="#FFAB00" />
               <StatTile label="INVALID DOC" value={tally.invalidDoc} accent="#AA00FF" />
               <StatTile label="FACE REFUSAL" value={tally.faceMismatchRefusals} accent="#FF6B6B" />
+            </View>
+
+            {/* Quick Venue Tools: Trespass Register & Printable Training IDs */}
+            <Text style={styles.sectionLabel}>VENUE SECURITY &amp; STAFF TRAINING</Text>
+            <View style={styles.standbyActionsRow}>
+              <Pressable style={styles.trespassBtn} onPress={onOpenTrespassRegister}>
+                <Text style={styles.trespassBtnText} numberOfLines={1}>
+                  BANNED LIST ({trespassCount})
+                </Text>
+              </Pressable>
+              <Pressable style={styles.standbyBtn} onPress={onPrintTestIds}>
+                <Text style={styles.standbyBtnText} numberOfLines={1}>
+                  PRINT TEST IDs
+                </Text>
+              </Pressable>
             </View>
 
             {/* End-of-Day Backup & Reset */}
@@ -608,6 +629,21 @@ const styles = StyleSheet.create({
   standbyActionsRow: {
     flexDirection: 'row',
     gap: 10,
+  },
+  trespassBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(255,23,68,0.16)',
+    borderWidth: 1,
+    borderColor: '#FF1744',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  trespassBtnText: {
+    color: '#FF5252',
+    fontWeight: '900',
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
   standbyBtn: {
     flex: 1,

@@ -4,9 +4,11 @@
   "main": "index.ts",
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-ml-kit/text-recognition": "^2.0.0",
     "expo": "~58.0.26",
     "expo-camera": "~58.0.14",
     "expo-haptics": "~58.0.8",
+    "expo-print": "~58.0.9",
     "expo-screen-capture": "~58.0.6",
     "expo-status-bar": "~58.0.5",
     "qrcode": "^1.5.4",
@@ -25,8 +27,8 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "build:pages": "rm -rf docs && expo export --platform web --output-dir docs && node scripts/postbuild-pages.mjs",
     "test": "vitest run",

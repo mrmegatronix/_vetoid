@@ -39,6 +39,11 @@ const VERDICT_PALETTE = {
     badgeBg: 'rgba(0, 0, 0, 0.28)',
     headline: 'NOT ACCEPTED',
   },
+  BANNED_TRESPASSED: {
+    bg: '#99001A',
+    badgeBg: 'rgba(0, 0, 0, 0.45)',
+    headline: 'TRESPASSED',
+  },
 } as const;
 
 export const VerdictOverlay: React.FC<VerdictOverlayProps> = ({
@@ -54,7 +59,9 @@ export const VerdictOverlay: React.FC<VerdictOverlayProps> = ({
   const [secondsLeft, setSecondsLeft] = useState(autoResetSeconds);
 
   const shouldAutoReset =
-    !patronMode && !(requireFaceConfirm && result.verdict === 'PASS_18_PLUS');
+    !patronMode &&
+    result.verdict !== 'BANNED_TRESPASSED' &&
+    !(requireFaceConfirm && result.verdict === 'PASS_18_PLUS');
 
   useEffect(() => {
     setSecondsLeft(autoResetSeconds);

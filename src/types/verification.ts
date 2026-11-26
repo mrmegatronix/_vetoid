@@ -20,7 +20,8 @@ export type VerdictStatus =
   | 'PASS_18_PLUS'
   | 'UNDER_18'
   | 'EXPIRED'
-  | 'INVALID_DOC';
+  | 'INVALID_DOC'
+  | 'BANNED_TRESPASSED';
 
 export type StaffRole =
   | 'Duty Manager'
