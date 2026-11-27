@@ -6,7 +6,12 @@
 - **Category:** Business / Utilities
 - **Content Rating:** 17+ / 18+ (Alcohol / Licensed Hospitality Operations Tool)
 - **Privacy Policy URL:** https://mrmegatronix.github.io/_vetoid/privacy.html
-- **Support / Website URL:** https://mrmegatronix.github.io/_vetoid/
+- **Support URL (Required by Apple):** https://mrmegatronix.github.io/_vetoid/support.html
+- **Marketing / Website URL:** https://mrmegatronix.github.io/_vetoid/
+- **Google Play Store Screenshots (`1080×1920`):** `store-assets/screenshots/google-play-*.png`
+- **Apple App Store 6.7" Screenshots (`1290×2796`):** `store-assets/screenshots/apple-ios-67-*.png`
+- **Google Play Feature Graphic (`1024×500`):** `assets/feature-graphic.png`
+- **Signed Google Play `.aab` (`v2.0.1`, `versionCode 3`):** https://expo.dev/artifacts/eas/X-O0S-NUbhRGu6vi7M1G6UBTEQAGu0sMQjzFLHdf_sY.aab
 - **Bundle ID / Package Name:** `nz.vetoid.scanner`
 - **App Review Test Instructions:**
   - Tap `TEST / DRILL` to test all 5 synthetic NZ IDs (Valid NZDL, Under-18 Kiwi Access, Expired Passport MRZ, Overseas Driver Licence, NZ DISTF Digital ID) without physical IDs.
