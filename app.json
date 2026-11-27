@@ -56,7 +56,8 @@
         {
           "cameraPermission": "VetoID uses the camera strictly in memory to verify 18+ age eligibility. Zero images or personal details are saved."
         }
-      ]
+      ],
+      "expo-observe"
     ],
     "extra": {
       "eas": {
