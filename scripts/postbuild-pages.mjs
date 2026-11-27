@@ -24,7 +24,14 @@ const manifest = {
 };
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
-// 3. Inject full-screen mobile/iOS PWA meta tags into docs/index.html
+// 3. Preserve/write public Privacy Policy page required by Google Play & Apple App Store
+const privacySrc = path.resolve(process.cwd(), 'privacy.html');
+const privacyDst = path.join(docsDir, 'privacy.html');
+if (fs.existsSync(privacySrc)) {
+  fs.copyFileSync(privacySrc, privacyDst);
+}
+
+// 4. Inject full-screen mobile/iOS PWA meta tags into docs/index.html
 if (fs.existsSync(indexPath)) {
   let html = fs.readFileSync(indexPath, 'utf8');
   const pwaMeta = [

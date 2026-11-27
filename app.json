@@ -10,13 +10,23 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "nz.vetoid.scanner",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "VetoID uses the camera strictly in memory to verify 18+ age eligibility under NZ law. Zero photos or personal data are ever stored.",
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ]
       }
     },
     "android": {
       "package": "nz.vetoid.scanner",
+      "versionCode": 2,
       "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#000000",
