@@ -11,10 +11,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface InfoModalProps {
   visible: boolean;
+  onOpenDeveloper: () => void;
   onClose: () => void;
 }
 
-export const InfoModal: React.FC<InfoModalProps> = ({ visible, onClose }) => {
+export const InfoModal: React.FC<InfoModalProps> = ({
+  visible,
+  onOpenDeveloper,
+  onClose,
+}) => {
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <SafeAreaView style={styles.backdrop}>
@@ -95,6 +100,12 @@ export const InfoModal: React.FC<InfoModalProps> = ({ visible, onClose }) => {
                 • Only anonymous shift totals (Pass / Under-18 / Expired / Invalid) are counted locally for Host Responsibility audits.
               </Text>
             </View>
+
+            <Pressable style={styles.devBtn} onPress={onOpenDeveloper}>
+              <Text style={styles.devBtnText}>
+                DEVELOPER • codebynikko • DATA SAFETY &amp; EULA
+              </Text>
+            </Pressable>
           </ScrollView>
         </View>
       </SafeAreaView>
@@ -220,5 +231,21 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.8,
     marginTop: 6,
+  },
+  devBtn: {
+    marginTop: 6,
+    backgroundColor: 'rgba(0,196,255,0.14)',
+    borderWidth: 1,
+    borderColor: '#00C4FF',
+    borderRadius: 14,
+    paddingVertical: 15,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
+  devBtnText: {
+    color: '#00C4FF',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
 });

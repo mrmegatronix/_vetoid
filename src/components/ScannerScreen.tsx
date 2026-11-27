@@ -53,6 +53,7 @@ import {
   playUnlockSound,
   playVerdictSound,
 } from '../utils/sounds';
+import { DeveloperModal } from './DeveloperModal';
 import { InfoModal } from './InfoModal';
 import { ManualDobModal } from './ManualDobModal';
 import { PinGateModal } from './PinGateModal';
@@ -76,6 +77,7 @@ export const ScannerScreen: React.FC = () => {
   const [shareQrOpen, setShareQrOpen] = useState(false);
   const [qrMode, setQrMode] = useState<'patron' | 'app'>('patron');
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [developerModalOpen, setDeveloperModalOpen] = useState(false);
   const [trespassModalOpen, setTrespassModalOpen] = useState(false);
   const [isSessionUnlocked, setIsSessionUnlocked] = useState(false);
   const [standbyDimmed, setStandbyDimmed] = useState(false);
@@ -671,7 +673,17 @@ export const ScannerScreen: React.FC = () => {
       {/* How to Use & NZ Compliance Info Modal */}
       <InfoModal
         visible={infoModalOpen}
+        onOpenDeveloper={() => {
+          setInfoModalOpen(false);
+          setDeveloperModalOpen(true);
+        }}
         onClose={() => setInfoModalOpen(false)}
+      />
+
+      {/* Developer & Legal Page (codebynikko, Data Safety, EULA) */}
+      <DeveloperModal
+        visible={developerModalOpen}
+        onClose={() => setDeveloperModalOpen(false)}
       />
 
       {/* Offline Patron Info & App Share QR Modal */}
