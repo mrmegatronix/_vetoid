@@ -12,22 +12,24 @@ import QRCode from 'qrcode';
 
 export const SHARE_APP_URL = 'https://mrmegatronix.github.io/_vetoid/';
 export const PATRON_INFO_URL = 'https://mrmegatronix.github.io/_vetoid/?patron=1';
+export const ANDROID_APK_URL =
+  'https://github.com/mrmegatronix/_vetoid/releases/latest/download/VetoID-release.apk';
 
 interface ShareQrModalProps {
   visible: boolean;
-  initialMode?: 'patron' | 'app';
+  initialMode?: 'patron' | 'app' | 'apk';
   onClose: () => void;
 }
 
 /**
- * 100% offline QR matrix renderer with Patron Info QR & Staff App Share QR tabs.
+ * 100% offline QR matrix renderer with Patron Info QR, Staff Web App QR, and Android APK Install QR.
  */
 export const ShareQrModal: React.FC<ShareQrModalProps> = ({
   visible,
   initialMode = 'patron',
   onClose,
 }) => {
-  const [mode, setMode] = useState<'patron' | 'app'>(initialMode);
+  const [mode, setMode] = useState<'patron' | 'app' | 'apk'>(initialMode);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -37,7 +39,12 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
     }
   }, [visible, initialMode]);
 
-  const activeUrl = mode === 'patron' ? PATRON_INFO_URL : SHARE_APP_URL;
+  const activeUrl =
+    mode === 'patron'
+      ? PATRON_INFO_URL
+      : mode === 'apk'
+      ? ANDROID_APK_URL
+      : SHARE_APP_URL;
 
   const matrix = useMemo(() => {
     const qr = QRCode.create(activeUrl, { errorCorrectionLevel: 'M' });
@@ -105,7 +112,11 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
         <View style={styles.card}>
           <View style={styles.header}>
             <Text style={styles.title}>
-              {mode === 'patron' ? 'PATRON PRIVACY QR' : 'SHARE VetoID APP'}
+              {mode === 'patron'
+                ? 'PATRON PRIVACY QR'
+                : mode === 'apk'
+                ? 'INSTALL ANDROID APK'
+                : 'SHARE WEB APP'}
             </Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
               <Text style={styles.closeText}>CLOSE</Text>
@@ -119,7 +130,15 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
               onPress={() => setMode('patron')}
             >
               <Text style={[styles.tabText, mode === 'patron' && styles.tabTextActive]}>
-                PATRON INFO
+                PATRON
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.tabBtn, mode === 'apk' && styles.tabBtnActive]}
+              onPress={() => setMode('apk')}
+            >
+              <Text style={[styles.tabText, mode === 'apk' && styles.tabTextActive]}>
+                ANDROID APK
               </Text>
             </Pressable>
             <Pressable
@@ -127,7 +146,7 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
               onPress={() => setMode('app')}
             >
               <Text style={[styles.tabText, mode === 'app' && styles.tabTextActive]}>
-                STAFF APP
+                WEB APP
               </Text>
             </Pressable>
           </View>
@@ -135,7 +154,9 @@ export const ShareQrModal: React.FC<ShareQrModalProps> = ({
           <Text style={styles.subtitle}>
             {mode === 'patron'
               ? 'Patrons can scan this QR to learn how VetoID protects their privacy under NZ law'
-              : 'Scan to open VetoID on another staff phone'}
+              : mode === 'apk'
+              ? 'Scan with an Android phone camera to download & install VetoID-release.apk directly'
+              : 'Scan to open VetoID web scanner on another device'}
           </Text>
 
           {/* High-contrast white quiet zone */}

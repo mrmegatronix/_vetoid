@@ -11,6 +11,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { verifyAuditHashChain } from '../domain/auditHashChain';
+import { getEPassportNfcStatus } from '../domain/epassportNfc';
 import { buildShiftBackupCsv } from '../storage/shiftStore';
 import {
   ShiftBackupRecord,
@@ -44,6 +46,9 @@ const HOLD_OPTIONS = [
   { label: '12s', value: 12 },
   { label: 'HOLD', value: 0 },
 ];
+
+const AGE_POLICY_OPTIONS = [18, 20, 25];
+const CAPACITY_OPTIONS = [100, 150, 250, 500];
 
 function formatShiftDuration(startIso: string): string {
   const diffMs = Math.max(0, Date.now() - new Date(startIso).getTime());
@@ -106,6 +111,8 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
 }) => {
   const [showSignage, setShowSignage] = useState(false);
   const [backupNotice, setBackupNotice] = useState('');
+  const chainStatus = verifyAuditHashChain(tally.events);
+  const nfcStatus = getEPassportNfcStatus(Platform.OS);
 
   const handleEndOfDayBackup = async () => {
     const record = await onEndShiftAndBackup();
@@ -156,7 +163,7 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
             </View>
 
             <Text style={styles.sectionLabel}>
-              ANONYMOUS SHIFT COUNTERS (CCTV-SYNC READY • ZERO PII)
+              ANONYMOUS SHIFT COUNTERS ({chainStatus.valid ? 'SHA-256 CHAIN INTACT' : 'CHAIN MISMATCH'})
             </Text>
 
             <View style={styles.statGrid}>
@@ -238,6 +245,73 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
                 </View>
               </>
             )}
+
+            <Text style={styles.sectionLabel}>VENUE AGE POLICY (MINIMUM ENTRY AGE)</Text>
+            <View style={styles.roleRow}>
+              {AGE_POLICY_OPTIONS.map((age) => {
+                const active = settings.minimumAge === age;
+                return (
+                  <Pressable
+                    key={age}
+                    style={[styles.holdChip, active && styles.roleChipActive]}
+                    onPress={() =>
+                      onUpdateSettings({ ...settings, minimumAge: age })
+                    }
+                  >
+                    <Text style={[styles.roleChipText, active && styles.roleChipTextActive]}>
+                      R{age}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.sectionLabel}>VENUE CAPACITY LIMIT &amp; HEADCOUNT</Text>
+            <View style={styles.roleRow}>
+              {CAPACITY_OPTIONS.map((cap) => {
+                const active = settings.venueCapacity === cap;
+                return (
+                  <Pressable
+                    key={cap}
+                    style={[styles.holdChip, active && styles.roleChipActive]}
+                    onPress={() =>
+                      onUpdateSettings({ ...settings, venueCapacity: cap })
+                    }
+                  >
+                    <Text style={[styles.roleChipText, active && styles.roleChipTextActive]}>
+                      {cap}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextWrap}>
+                <Text style={styles.settingTitle}>Auto +1 Headcount on PASS</Text>
+                <Text style={styles.settingSub}>
+                  Current: {tally.currentHeadcount ?? 0} / {settings.venueCapacity} • Peak: {tally.peakHeadcount ?? 0}
+                </Text>
+              </View>
+              <Switch
+                value={settings.autoIncrementHeadcount}
+                onValueChange={(v) =>
+                  onUpdateSettings({ ...settings, autoIncrementHeadcount: v })
+                }
+                trackColor={{ false: '#374151', true: '#00C4FF' }}
+              />
+            </View>
+
+            <Text style={styles.sectionLabel}>ePASSPORT NFC &amp; DISTF DIGITAL ID</Text>
+            <View style={styles.shiftMetaCard}>
+              <Text style={styles.shiftMetaLine}>
+                NFC Status: <Text style={styles.accentBold}>{nfcStatus.supported ? 'READY' : 'NATIVE APP ONLY'}</Text>
+              </Text>
+              <Text style={styles.settingSub}>{nfcStatus.platformNote}</Text>
+              <Text style={styles.settingSub}>
+                CSCA Trust Bundle: {nfcStatus.cscaBundleVersion} • DISTF ISO 18013-5 QR Active
+              </Text>
+            </View>
 
             <Text style={styles.sectionLabel}>VERDICT DISPLAY HOLD TIME</Text>
             <View style={styles.roleRow}>

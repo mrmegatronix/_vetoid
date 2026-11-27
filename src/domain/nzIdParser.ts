@@ -9,6 +9,10 @@ import {
 } from './nzDateTime';
 import { computeMrzCheckDigit, parseTd3PassportMrz } from './mrzParser';
 import {
+  buildSampleFreshDistfQr,
+  verifyDistfDigitalId,
+} from './digitalIdVerifier';
+import {
   DocumentCategory,
   VerificationResult,
 } from '../types/verification';
@@ -215,6 +219,10 @@ export function evaluateScannedDocumentText(
   referenceDate: CalendarDate = getNzToday(),
   minimumAge: number = 18
 ): VerificationResult {
+  // 0. Accredited NZ Digital ID (ISO 18013-5 mDL / DISTF Act 2023)
+  const digitalResult = verifyDistfDigitalId(rawText, referenceDate, minimumAge);
+  if (digitalResult) return digitalResult;
+
   const upper = rawText.toUpperCase();
 
   // 1. Explicit SSAA 2012 Hard Rejections
@@ -444,5 +452,11 @@ export const PRACTICE_DRILL_CARDS: PracticeCard[] = [
       'DOB: 10/03/1995',
       'EXPIRY: 10/03/2030',
     ].join('\n'),
+  },
+  {
+    id: 'distf-digital-id',
+    label: 'NZ Digital ID (Govt.nz DISTF)',
+    subtitle: 'Expected: PASS 18+ (ISO 18013-5 Selective Disclosure)',
+    rawOcrText: buildSampleFreshDistfQr(),
   },
 ];

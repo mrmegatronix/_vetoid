@@ -5,6 +5,7 @@ export type AcceptedDocType =
   | 'PASSPORT'
   | 'KIWI_ACCESS'
   | 'LEGACY_HNZ_18_PLUS'
+  | 'NZ_DIGITAL_ID'
   | 'MANUAL_DOB';
 
 export type RejectedDocType =
@@ -66,6 +67,8 @@ export interface AnonymousScanEvent {
   verdict: VerdictStatus | 'FACE_MISMATCH';
   docType: DocumentCategory | 'VISUAL_FACE_CHECK';
   staffRole: StaffRole;
+  prevHash?: string;
+  eventHash?: string;
 }
 
 export interface ShiftTally {
@@ -79,6 +82,8 @@ export interface ShiftTally {
   invalidDoc: number;
   manualFallback: number;
   faceMismatchRefusals: number;
+  currentHeadcount: number;
+  peakHeadcount: number;
   events: AnonymousScanEvent[];
 }
 
@@ -97,7 +102,9 @@ export interface VenueSettings {
   keepUnlockedStandby: boolean;
   soundEffectsEnabled: boolean;
   defaultStaffRole: StaffRole;
-  minimumAge: number;
+  minimumAge: number; // 18 | 20 | 25
+  venueCapacity: number;
+  autoIncrementHeadcount: boolean;
 }
 
 export const DEFAULT_VENUE_SETTINGS: VenueSettings = {
@@ -110,4 +117,6 @@ export const DEFAULT_VENUE_SETTINGS: VenueSettings = {
   soundEffectsEnabled: true,
   defaultStaffRole: 'Security Staff',
   minimumAge: 18,
+  venueCapacity: 150,
+  autoIncrementHeadcount: true,
 };

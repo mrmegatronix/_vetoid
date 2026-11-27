@@ -11,6 +11,16 @@ import {
   PRACTICE_DRILL_CARDS,
 } from '../nzIdParser';
 import { getAllowedDobDigits } from '../smartDobKeypad';
+import {
+  buildSampleFreshDistfQr,
+  verifyDistfDigitalId,
+} from '../digitalIdVerifier';
+import {
+  computeAuditEventHash,
+  GENESIS_HASH,
+  verifyAuditHashChain,
+} from '../auditHashChain';
+import { buildIcao9303BacInput } from '../epassportNfc';
 
 const REF_DATE = { year: 2026, month: 11, day: 23 };
 
@@ -143,5 +153,61 @@ describe('Smart DOB Keypad Constraints', () => {
     expect([...getAllowedDobDigits('1506', 2026)]).toEqual(['1', '2']);
     expect([...getAllowedDobDigits('15061', 2026)]).toEqual(['9']);
     expect([...getAllowedDobDigits('15062', 2026)]).toEqual(['0']);
+  });
+});
+
+describe('Phase 2: DISTF Digital ID, Audit Hash Chain & ePassport BAC', () => {
+  it('verifies fresh accredited NZ DISTF Digital ID and enforces R25 policy', () => {
+    const now = 1_795_000_000;
+    const qr = buildSampleFreshDistfQr(now);
+    const pass18 = verifyDistfDigitalId(qr, REF_DATE, 18, now);
+    expect(pass18?.verdict).toBe('PASS_18_PLUS');
+    const fail25 = verifyDistfDigitalId(qr, REF_DATE, 25, now);
+    expect(fail25?.verdict).toBe('UNDER_18');
+  });
+
+  it('rejects stale/replayed Digital ID QR screenshots (>120s old) and unaccredited issuers', () => {
+    const now = 1_795_000_000;
+    const staleQr = buildSampleFreshDistfQr(now - 300);
+    expect(verifyDistfDigitalId(staleQr, REF_DATE, 18, now)?.verdict).toBe('INVALID_DOC');
+
+    const fakeIssuer = JSON.stringify({
+      issuer: 'fake-id-app.com',
+      age_over_18: true,
+      iat: now,
+    });
+    expect(verifyDistfDigitalId(fakeIssuer, REF_DATE, 18, now)?.verdict).toBe('INVALID_DOC');
+  });
+
+  it('validates intact SHA-256 audit hash chain and detects tampered rows', () => {
+    const e1Base = {
+      timestampIso: '2026-11-27T01:00:00.000Z',
+      staffRole: 'Security Staff',
+      docType: 'NZ_DRIVER_LICENCE',
+      verdict: 'PASS_18_PLUS',
+    };
+    const h1 = computeAuditEventHash(GENESIS_HASH, e1Base);
+    const e2Base = {
+      timestampIso: '2026-11-27T01:02:00.000Z',
+      staffRole: 'Security Staff',
+      docType: 'KIWI_ACCESS',
+      verdict: 'UNDER_18',
+    };
+    const h2 = computeAuditEventHash(h1, e2Base);
+    const events = [
+      { ...e1Base, prevHash: GENESIS_HASH, eventHash: h1 },
+      { ...e2Base, prevHash: h1, eventHash: h2 },
+    ];
+    expect(verifyAuditHashChain(events).valid).toBe(true);
+
+    // Tamper with verdict on row 2
+    const tampered = [events[0], { ...events[1], verdict: 'PASS_18_PLUS' }];
+    expect(verifyAuditHashChain(tampered).valid).toBe(false);
+  });
+
+  it('derives ICAO 9303 ePassport BAC MRZ key input', () => {
+    const bac = buildIcao9303BacInput('LA123456<', '980512', '310512');
+    expect(bac?.mrzInfoString.length).toBe(24);
+    expect(bac?.keySeedPreviewHash.length).toBe(16);
   });
 });

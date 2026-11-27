@@ -8,14 +8,16 @@ import {
   Text,
   View,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { buildSampleFreshDistfQr } from '../domain/digitalIdVerifier';
 import { ClockTamperGuard } from '../domain/nzDateTime';
 import {
   evaluateScannedDocumentText,
   PRACTICE_DRILL_CARDS,
 } from '../domain/nzIdParser';
 import {
+  adjustHeadcount,
   archiveShiftEndOfDay,
   createEmptyShiftTally,
   loadShiftBackups,
@@ -127,10 +129,14 @@ export const ScannerScreen: React.FC = () => {
       setActiveVerdict(result);
       triggerVerdictHaptics(result.verdict);
       playVerdictSound(result.verdict, settings.soundEffectsEnabled);
-      const updated = await recordAnonymousVerdict(tally, result);
+      const updated = await recordAnonymousVerdict(
+        tally,
+        result,
+        settings.autoIncrementHeadcount
+      );
       setTally(updated);
     },
-    [tally, settings.soundEffectsEnabled]
+    [tally, settings.soundEffectsEnabled, settings.autoIncrementHeadcount]
   );
 
   const handleDismissVerdict = useCallback(() => {
@@ -171,11 +177,33 @@ export const ScannerScreen: React.FC = () => {
     [settings.minimumAge, trespassRecords]
   );
 
-  const handleRunPracticeCard = (rawOcrText: string) => {
+  const handleRunPracticeCard = (cardId: string, rawOcrText: string) => {
     setDrillModalOpen(false);
-    const res = evaluateWithTrespassCheck(rawOcrText);
+    const payload =
+      cardId === 'distf-digital-id' ? buildSampleFreshDistfQr() : rawOcrText;
+    const res = evaluateWithTrespassCheck(payload);
     presentVerdict(res);
   };
+
+  const handleAdjustHeadcount = async (delta: number) => {
+    const updated = await adjustHeadcount(tally, delta);
+    setTally(updated);
+  };
+
+  const handleQrBarcodeScanned = useCallback(
+    (scan: BarcodeScanningResult) => {
+      if (activeVerdict || scanning || standbyDimmed || !scan.data) return;
+      // Only auto-trigger on DISTF / ISO 18013-5 Digital ID QR payloads
+      if (
+        /^(mdoc:|openid4vp:|nzdistf:|\{)/i.test(scan.data.trim()) &&
+        scan.data.includes('age_over_18')
+      ) {
+        const res = evaluateWithTrespassCheck(scan.data);
+        presentVerdict(res);
+      }
+    },
+    [activeVerdict, scanning, standbyDimmed, evaluateWithTrespassCheck, presentVerdict]
+  );
 
   const handleUpdateSettings = async (next: VenueSettings) => {
     setSettings(next);
@@ -432,6 +460,8 @@ export const ScannerScreen: React.FC = () => {
             style={StyleSheet.absoluteFill}
             facing="back"
             enableTorch={torchOn}
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+            onBarcodeScanned={handleQrBarcodeScanned}
           />
         ) : (
           <View style={styles.cameraFallback}>
@@ -464,6 +494,36 @@ export const ScannerScreen: React.FC = () => {
 
       {/* Bottom-Third One-Handed Thumb Zone */}
       <View style={styles.thumbZone}>
+        {/* Integrated Door Headcount / Capacity Bar */}
+        <View
+          style={[
+            styles.headcountBar,
+            (tally.currentHeadcount ?? 0) >= settings.venueCapacity
+              ? styles.headcountFull
+              : (tally.currentHeadcount ?? 0) >= settings.venueCapacity * 0.9
+              ? styles.headcountNear
+              : null,
+          ]}
+        >
+          <Pressable
+            style={styles.headcountBtn}
+            onPress={() => handleAdjustHeadcount(-1)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.headcountBtnText}>-1 OUT</Text>
+          </Pressable>
+          <Text style={styles.headcountLabel} numberOfLines={1}>
+            IN: {tally.currentHeadcount ?? 0} / {settings.venueCapacity} • R{settings.minimumAge}
+          </Text>
+          <Pressable
+            style={styles.headcountBtn}
+            onPress={() => handleAdjustHeadcount(1)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.headcountBtnText}>+1 IN</Text>
+          </Pressable>
+        </View>
+
         <Pressable
           style={[styles.scanPrimaryBtn, scanning && styles.scanPrimaryBtnBusy]}
           onPress={handleScanLiveFrame}
@@ -548,7 +608,7 @@ export const ScannerScreen: React.FC = () => {
                 <Pressable
                   key={card.id}
                   style={styles.drillCard}
-                  onPress={() => handleRunPracticeCard(card.rawOcrText)}
+                  onPress={() => handleRunPracticeCard(card.id, card.rawOcrText)}
                 >
                   <Text style={styles.drillCardTitle}>{card.label}</Text>
                   <Text style={styles.drillCardSub}>{card.subtitle}</Text>
@@ -895,10 +955,46 @@ const styles = StyleSheet.create({
   },
   thumbZone: {
     paddingHorizontal: 12,
-    paddingTop: 10,
+    paddingTop: 8,
     paddingBottom: 14,
     backgroundColor: '#000000',
-    gap: 10,
+    gap: 8,
+  },
+  headcountBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#11161F',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  headcountNear: {
+    borderColor: '#FFAB00',
+    backgroundColor: 'rgba(255,171,0,0.14)',
+  },
+  headcountFull: {
+    borderColor: '#FF1744',
+    backgroundColor: 'rgba(255,23,68,0.22)',
+  },
+  headcountBtn: {
+    backgroundColor: '#1B2230',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  headcountBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  headcountLabel: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
   },
   scanPrimaryBtn: {
     width: '100%',
