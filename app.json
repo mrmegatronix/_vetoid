@@ -19,7 +19,9 @@
         "NSPrivacyAccessedAPITypes": [
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
-            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
           }
         ]
       }
@@ -36,7 +38,8 @@
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.VIBRATE"
+        "android.permission.VIBRATE",
+        "android.permission.RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -54,6 +57,12 @@
           "cameraPermission": "VetoID uses the camera strictly in memory to verify 18+ age eligibility. Zero images or personal details are saved."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d185c95d-27dd-4376-b5e7-6a90f2426189"
+      }
+    },
+    "owner": "codebynikko"
   }
 }
